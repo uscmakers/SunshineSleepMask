@@ -1,14 +1,37 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet } from "react-native";
 
-import EditScreenInfo from '@/components/EditScreenInfo';
-import { Text, View } from '@/components/Themed';
+import { Text, View } from "@/components/Themed";
+import React from "react";
+import ColorPicker, {
+  BrightnessSlider,
+  Panel3,
+  Preview,
+} from "reanimated-color-picker";
 
 export default function TabOneScreen() {
+  const onSelectColor = ({ hex }: { hex: string }) => {
+    "worklet";
+    // do something with the selected color.
+    console.log(hex);
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Tab One</Text>
-      <View style={styles.separator} lightColor="#eee" darkColor="rgba(255,255,255,0.1)" />
-      <EditScreenInfo path="app/(tabs)/index.tsx" />
+      <Text style={styles.title}>Color Picker</Text>
+      <View
+        style={styles.separator}
+        lightColor="#eee"
+        darkColor="rgba(255,255,255,0.1)"
+      />
+      <ColorPicker
+        style={{ width: "70%", gap: 10 }}
+        value="white"
+        onComplete={onSelectColor}
+      >
+        <Panel3 />
+        <BrightnessSlider />
+        <Preview hideInitialColor />
+      </ColorPicker>
     </View>
   );
 }
@@ -16,16 +39,16 @@ export default function TabOneScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   separator: {
     marginVertical: 30,
     height: 1,
-    width: '80%',
+    width: "80%",
   },
 });
