@@ -1,7 +1,9 @@
 import { StyleSheet } from "react-native";
 
 import { Text, View } from "@/components/Themed";
-import React from "react";
+import { initMqtt, sendColor } from "@/hooks/mqttClient";
+import React, { useEffect } from "react";
+import { scheduleOnRN } from "react-native-worklets";
 import ColorPicker, {
   BrightnessSlider,
   Panel3,
@@ -9,10 +11,15 @@ import ColorPicker, {
 } from "reanimated-color-picker";
 
 export default function TabOneScreen() {
+  useEffect(() => {
+    initMqtt();
+  }, []);
+
   const onSelectColor = ({ hex }: { hex: string }) => {
     "worklet";
     // do something with the selected color.
     console.log(hex);
+    scheduleOnRN(sendColor, hex);
   };
 
   return (
