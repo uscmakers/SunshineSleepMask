@@ -63,6 +63,7 @@ export function sendColor(colorHex: string) {
     const payload = JSON.stringify({ color: colorHex });
     client.publish(COLOR_TOPIC, payload, { qos: 0 }, (err) => {
       if (err) console.error("Publish error", err);
+      console.log("Color sent:", colorHex);
     });
   } catch (error) {
     console.error("Error sending color:", error);

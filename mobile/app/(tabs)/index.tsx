@@ -2,7 +2,7 @@ import { StyleSheet } from "react-native";
 
 import { Text, View } from "@/components/Themed";
 import { initMqtt, sendColor } from "@/hooks/mqttClient";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { scheduleOnRN } from "react-native-worklets";
 import ColorPicker, {
   BrightnessSlider,
@@ -10,16 +10,63 @@ import ColorPicker, {
   Preview,
 } from "reanimated-color-picker";
 
+const THROTTLE_INTERVAL_MS = 150; // Send color every 150ms max
+
 export default function TabOneScreen() {
+  const lastSentTimeRef = useRef<number>(0);
+  const pendingColorRef = useRef<string | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     initMqtt();
+    return () => {
+      // Cleanup timeout on unmount
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, []);
+
+  const throttledSendColor = (hex: string) => {
+    // Store the latest color
+    pendingColorRef.current = hex;
+
+    const now = Date.now();
+    const timeSinceLastSend = now - lastSentTimeRef.current;
+
+    // If enough time has passed, send immediately
+    if (timeSinceLastSend >= THROTTLE_INTERVAL_MS) {
+      lastSentTimeRef.current = now;
+      if (pendingColorRef.current) {
+        sendColor(pendingColorRef.current);
+        pendingColorRef.current = null;
+      }
+      // Clear any pending timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    } else {
+      // Schedule to send after the remaining time (debounce approach)
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      const remainingTime = THROTTLE_INTERVAL_MS - timeSinceLastSend;
+      timeoutRef.current = setTimeout(() => {
+        if (pendingColorRef.current) {
+          lastSentTimeRef.current = Date.now();
+          sendColor(pendingColorRef.current);
+          pendingColorRef.current = null;
+        }
+        timeoutRef.current = null;
+      }, remainingTime);
+    }
+  };
 
   const onSelectColor = ({ hex }: { hex: string }) => {
     "worklet";
-    // do something with the selected color.
-    console.log(hex);
-    scheduleOnRN(sendColor, hex);
+    // Schedule the throttled send on the React Native thread
+    scheduleOnRN(throttledSendColor, hex);
   };
 
   return (
@@ -33,7 +80,7 @@ export default function TabOneScreen() {
       <ColorPicker
         style={{ width: "70%", gap: 10 }}
         value="white"
-        onComplete={onSelectColor}
+        onChange={onSelectColor}
       >
         <Panel3 />
         <BrightnessSlider />
