@@ -68,10 +68,12 @@ void hexToRGB(String hex, uint8_t &r, uint8_t &g, uint8_t &b) {
 // ======================================================
 void setColorAll(uint8_t r, uint8_t g, uint8_t b) {
   for (int i = 0; i < NUM_LEDS_1; i++) {
-    strip1.setPixelColor(i, strip1.Color(r, g, b));
+    //strip1.setPixelColor(i, strip1.Color(r, g, b));
+    strip1.setPixelColor(i, r, g, b);
   }
   for (int i = 0; i < NUM_LEDS_2; i++) {
-    strip2.setPixelColor(i, strip2.Color(r, g, b));
+    //strip2.setPixelColor(i, strip2.Color(r, g, b));
+    strip2.setPixelColor(i, r, g, b);
   }
 
   strip1.show();
