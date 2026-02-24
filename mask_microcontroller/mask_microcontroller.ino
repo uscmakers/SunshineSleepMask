@@ -12,7 +12,7 @@
 
 // Strip 1
 #define DATA_PIN_1   4   // D2
-#define CLOCK_PIN_1  5   // D1
+#define CLOCK_PIN_1  2   // D4
 #define NUM_LEDS_1   30
 
 // Strip 2
