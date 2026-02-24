@@ -1,17 +1,30 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include <Adafruit_NeoPixel.h>
+// #include <Adafruit_NeoPixel.h>
+#include <Adafruit_DotStar.h>
+
+#include <SPI.h>
 
 // =====================
 // LED STRIPS
 // =====================
-#define LED_PIN_1  4   // D2
-#define LED_PIN_2  0   // D3
-#define NUM_LEDS_1 30
-#define NUM_LEDS_2 30
 
-Adafruit_NeoPixel strip1(NUM_LEDS_1, LED_PIN_1, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel strip2(NUM_LEDS_2, LED_PIN_2, NEO_GRB + NEO_KHZ800);
+
+// Strip 1
+#define DATA_PIN_1   4   // D2
+#define CLOCK_PIN_1  5   // D1
+#define NUM_LEDS_1   30
+
+// Strip 2
+#define DATA_PIN_2   0   // D3
+#define CLOCK_PIN_2  15  // D8
+#define NUM_LEDS_2   30
+
+//Adafruit_NeoPixel strip1(NUM_LEDS_1, LED_PIN_1, NEO_GRB + NEO_KHZ800);
+//Adafruit_NeoPixel strip2(NUM_LEDS_2, LED_PIN_2, NEO_GRB + NEO_KHZ800);
+
+Adafruit_DotStar strip1(NUM_LEDS_1, DATA_PIN_1, CLOCK_PIN_1, DOTSTAR_BGR);
+Adafruit_DotStar strip2(NUM_LEDS_2, DATA_PIN_2, CLOCK_PIN_2, DOTSTAR_BGR);
 
 // =====================
 // WiFi Credentials
