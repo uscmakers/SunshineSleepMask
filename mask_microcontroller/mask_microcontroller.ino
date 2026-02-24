@@ -29,8 +29,8 @@ Adafruit_DotStar strip2(NUM_LEDS_2, DATA_PIN_2, CLOCK_PIN_2, DOTSTAR_BGR);
 // =====================
 // WiFi Credentials
 // =====================
-const char* WIFI_SSID = "Brennen";
-const char* WIFI_PASSWORD = "brennenho";
+const char* WIFI_SSID = " ";
+const char* WIFI_PASSWORD = " ";
 
 // =====================
 // flespi MQTT Settings
@@ -38,7 +38,7 @@ const char* WIFI_PASSWORD = "brennenho";
 const char* MQTT_HOST = "mqtt.flespi.io";
 const int   MQTT_PORT = 1883;
 
-const char* MQTT_TOKEN = "zMUoSoYnkdqAQ3ISp8nJCtRmPlYbouGeaYR4R6Kl3ge8MhNlUJWq9mycqx0qQqiD";
+const char* MQTT_TOKEN = "jhIgc6MC1zVOGzhroq483pUhzXZSRhW9NfQR20OCOMf2Rgb2nmKRpzYPTszjDWCd";
 const char* DEVICE_ID = "esp8266-client";
 const char* SUB_TOPIC = "devices/sleepmask/color";
 
