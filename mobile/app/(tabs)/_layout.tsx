@@ -50,8 +50,16 @@ export default function TabLayout() {
           ),
         }}
       />
+      
       <Tabs.Screen
         name="two"
+        options={{
+          title: "Alarm",
+          tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
         options={{
           title: "Settings",
           tabBarIcon: ({ color }) => <TabBarIcon name="cog" color={color} />,
