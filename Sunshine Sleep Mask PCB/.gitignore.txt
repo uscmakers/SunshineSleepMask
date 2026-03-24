@@ -1,0 +1,15 @@
+# KiCad temporary/cache files
+*.kicad_prl
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.bak
+*.tmp
+*-cache.lib
+
+# Auto-generated files
+*.net
+*.xml
+
+# OS junk
+.DS_Store
+Thumbs.db
