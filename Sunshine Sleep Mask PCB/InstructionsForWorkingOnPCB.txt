@@ -1,0 +1,31 @@
+# KiCad Project Guide
+
+## How to Open the Project
+
+1. Clone the repository (GitHub Desktop or Git)
+2. Open KiCad
+3. Click Open Project
+4. Select file you want to work on
+
+ 
+## Team Workflow
+
+### Before editing
+
+* Open GitHub Desktop
+* Click Fetch origin and Pull origin
+
+### After editing
+
+* Write a commit message
+* Click Commit to main
+* Click Push origin
+
+
+## Important Rules
+
+* Only one person edits the PCB file at a time
+* Avoid editing the same schematic file simultaneously
+* Always pull before starting work
+* Always push when finished
+* Communicate before making major changes
