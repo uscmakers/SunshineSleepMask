@@ -30,7 +30,7 @@
 //   DOTSTAR_GBR  Pixels are wired for GBR bitstream (some older DotStars)
 
 Adafruit_DotStarMatrix matrix = Adafruit_DotStarMatrix(
-  8, 8, DATAPIN, CLOCKPIN,
+  16, 8, DATAPIN, CLOCKPIN,
   DS_MATRIX_TOP     + DS_MATRIX_RIGHT +
   DS_MATRIX_COLUMNS + DS_MATRIX_PROGRESSIVE,
   DOTSTAR_BRG);
@@ -57,7 +57,7 @@ void loop() {
   matrix.fillScreen(0);
   matrix.setCursor(x, 0);
   matrix.print(F("Howdy"));
-  if(--x < -36) {
+  if(--x < -72) {
     x = matrix.width();
     if(++pass >= 3) pass = 0;
     matrix.setTextColor(colors[pass]);
