@@ -52,9 +52,9 @@ export default function TabLayout() {
       />
       
       <Tabs.Screen
-        name="two"
+        name="alarm_clock"
         options={{
-          title: "Alarm",
+          title: "Alarm Clock",
           tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
         }}
       />
