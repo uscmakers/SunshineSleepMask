@@ -1,0 +1,8 @@
+# KiCad / OS junk
+#auto_saved_files#
+*.kicad_prl
+*.lck
+*.bak
+.DS_Store
+fp-info-cache
+Sunshine Sleep Mask-backups/
