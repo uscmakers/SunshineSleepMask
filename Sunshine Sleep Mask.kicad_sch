@@ -1779,6 +1779,16 @@
 		)
 		(uuid "48672dc4-a754-4a78-ae19-ef82fdbb7f03")
 	)
+	(text "we did it"
+		(exclude_from_sim no)
+		(at 90.678 109.982 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "5c9aa611-a220-4984-a670-b9e10acb0429")
+	)
 	(text "speaker"
 		(exclude_from_sim no)
 		(at 169.418 91.44 0)
