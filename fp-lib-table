@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "Library_For_ESP32_Footprint")(type "KiCad")(uri "${KIPRJMOD}/Library_For_ESP32_Footprint.pretty")(options "")(descr ""))
+)
