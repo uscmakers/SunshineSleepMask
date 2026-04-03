@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "library_for_battery_converter")(type "KiCad")(uri "C:/Users/paula/SunshineMask/pcb/SunshineSleepMask/SunshineSleepMask2.0/Sunshine-Sleep-Mask-PCB-main/library_for_battery_converter.kicad_sym")(options "")(descr ""))
+)
