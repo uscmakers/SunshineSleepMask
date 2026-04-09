@@ -2262,6 +2262,16 @@
 	)
 	(wire
 		(pts
+			(xy 88.9 97.79) (xy 88.9 102.87)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "04874719-b8fc-4513-8cd9-e0d347756927")
+	)
+	(wire
+		(pts
 			(xy 115.57 59.69) (xy 130.81 59.69)
 		)
 		(stroke
@@ -2342,6 +2352,16 @@
 	)
 	(wire
 		(pts
+			(xy 115.57 105.41) (xy 93.98 105.41)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "398023f3-2f6f-4d88-9f8b-afe1ef2dbdc9")
+	)
+	(wire
+		(pts
 			(xy 41.91 107.95) (xy 41.91 104.14)
 		)
 		(stroke
@@ -2412,16 +2432,6 @@
 	)
 	(wire
 		(pts
-			(xy 113.03 102.87) (xy 93.98 102.87)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "54a2e66c-0818-4ebe-b7a0-b03efd99c038")
-	)
-	(wire
-		(pts
 			(xy 115.57 60.96) (xy 115.57 68.58)
 		)
 		(stroke
@@ -2452,16 +2462,6 @@
 	)
 	(wire
 		(pts
-			(xy 115.57 105.41) (xy 88.9 105.41)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "6040f056-aa4a-4654-8feb-87ea3c7249b9")
-	)
-	(wire
-		(pts
 			(xy 115.57 68.58) (xy 143.51 68.58)
 		)
 		(stroke
@@ -2489,16 +2489,6 @@
 			(type default)
 		)
 		(uuid "7236b0d1-c78a-40d4-8319-36061199ac38")
-	)
-	(wire
-		(pts
-			(xy 93.98 97.79) (xy 93.98 102.87)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "77778ddb-8a7e-4a0b-b197-cbd6620124f7")
 	)
 	(wire
 		(pts
@@ -2672,16 +2662,6 @@
 	)
 	(wire
 		(pts
-			(xy 88.9 97.79) (xy 88.9 105.41)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "abd6f613-4753-404a-b583-291d8a19e1a5")
-	)
-	(wire
-		(pts
 			(xy 143.51 95.25) (xy 118.11 95.25)
 		)
 		(stroke
@@ -2752,6 +2732,16 @@
 	)
 	(wire
 		(pts
+			(xy 93.98 97.79) (xy 93.98 105.41)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e4879d59-6b86-4a36-87b9-120f3cc0801a")
+	)
+	(wire
+		(pts
 			(xy 134.62 26.67) (xy 73.66 26.67)
 		)
 		(stroke
@@ -2759,6 +2749,16 @@
 			(type default)
 		)
 		(uuid "e8a8d4d9-bcf7-4c11-8b4d-e72cfcc55ac3")
+	)
+	(wire
+		(pts
+			(xy 88.9 102.87) (xy 113.03 102.87)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ed722b67-4f9a-4ced-8f73-2328c2eeb350")
 	)
 	(wire
 		(pts
@@ -3090,7 +3090,6 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "2295bde4-de76-4e58-a872-06242f1ab996")
 		(property "Reference" "U2"
 			(at 123.19 40.64 0)
@@ -3100,7 +3099,7 @@
 				)
 			)
 		)
-		(property "Value" "~"
+		(property "Value" "Boost Converter"
 			(at 123.19 43.18 0)
 			(effects
 				(font
