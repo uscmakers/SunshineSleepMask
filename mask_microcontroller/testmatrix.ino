@@ -5,6 +5,11 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_DotStarMatrix.h>
 #include <Adafruit_DotStar.h>
+//------------------------ added
+#include "AudioTools.h"
+#include "BluetoothA2DPSink.h"
+//------------------------ added end
+
 #ifndef PSTR
  #define PSTR // Make Arduino Due happy
 #endif
@@ -40,6 +45,13 @@ Adafruit_DotStarMatrix matrix = Adafruit_DotStarMatrix(
 //  DS_MATRIX_COLUMNS + DS_MATRIX_PROGRESSIVE,
 //  DOTSTAR_BRG);
 
+//------------------- added
+
+I2SStream i2s;
+BluetoothA2DPSink a2dp_sink(i2s);
+// -------------------- added end
+
+
 const uint16_t colors[] = {
   matrix.Color(255, 0, 0), matrix.Color(0, 255, 0), matrix.Color(0, 0, 255) };
 
@@ -48,6 +60,16 @@ void setup() {
   matrix.setTextWrap(false);
   matrix.setBrightness(40);
   matrix.setTextColor(colors[0]);
+
+  //-------------- added
+  auto cfg = i2s.defaultConfig();
+    cfg.pin_bck = 26;
+    cfg.pin_ws = 25;
+    cfg.pin_data = 27;
+    i2s.begin(cfg);
+
+    a2dp_sink.start("MyMusic");
+  // ----------------- added
 }
 
 int x    = matrix.width();
