@@ -1,6 +1,7 @@
 // Adafruit_DotStarMatrix example for single DotStar LED matrix.
 // Scrolls 'Howdy' across the matrix.
 // make sure to download all necessary libraries for this!!!
+// useful for audio shi: https://github.com/pschatzmann/ESP32-A2DP/
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_DotStarMatrix.h>
