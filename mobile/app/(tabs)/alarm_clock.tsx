@@ -1,21 +1,33 @@
-import React, { useState } from "react";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Switch,
   FlatList,
   Modal,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { scheduleOnRN } from "react-native-worklets";
+import ColorPicker, {
+  BrightnessSlider,
+  Panel3,
+  Preview,
+} from "reanimated-color-picker";
+
+import { sendColor } from "@/hooks/mqttClient";
+import { useWakePreferences } from "@/providers/WakePreferencesContext";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const RAMP_OPTIONS = [5, 10, 15, 20, 30];
+const SNOOZE_OPTIONS = [5, 9, 10, 15];
+const THROTTLE_INTERVAL_MS = 150;
 
 type Alarm = {
   id: string;
-  rawTime: Date;        // ✅ source of truth (24h)
-  time: string;         // ✅ display only (AM/PM)
+  rawTime: Date;
+  time: string;
   label: string;
   days: string[];
   enabled: boolean;
@@ -54,10 +66,7 @@ function formatDaysLabel(days: string[]) {
     return "Weekdays";
   }
 
-  if (
-    weekends.every((d) => days.includes(d)) &&
-    days.length === 2
-  ) {
+  if (weekends.every((d) => days.includes(d)) && days.length === 2) {
     return "Weekends";
   }
 
@@ -89,7 +98,16 @@ function AlarmCard({ alarm, toggle, remove, edit }: AlarmCardProps) {
   );
 }
 
-export default function AlarmsScreen() {
+export default function AlarmScreen() {
+  const {
+    wakeColorHex,
+    setWakeColorHex,
+    sunriseRampMinutes,
+    setSunriseRampMinutes,
+    snoozeMinutes,
+    setSnoozeMinutes,
+  } = useWakePreferences();
+
   const [alarms, setAlarms] = useState<Alarm[]>([
     {
       id: "1",
@@ -116,9 +134,60 @@ export default function AlarmsScreen() {
   const [tempTime, setTempTime] = useState<Date>(new Date());
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
 
-  // ======================
-  // ACTIONS
-  // ======================
+  const lastSentTimeRef = useRef<number>(0);
+  const pendingColorRef = useRef<string | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      pendingColorRef.current = null;
+    };
+  }, []);
+
+  const throttledSendColor = useCallback(
+    (hex: string) => {
+      setWakeColorHex(hex);
+      pendingColorRef.current = hex;
+
+      const now = Date.now();
+      const timeSinceLastSend = now - lastSentTimeRef.current;
+
+      if (timeSinceLastSend >= THROTTLE_INTERVAL_MS) {
+        lastSentTimeRef.current = now;
+        if (pendingColorRef.current) {
+          sendColor(pendingColorRef.current);
+          pendingColorRef.current = null;
+        }
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+      } else {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        const remainingTime = THROTTLE_INTERVAL_MS - timeSinceLastSend;
+        timeoutRef.current = setTimeout(() => {
+          if (pendingColorRef.current) {
+            lastSentTimeRef.current = Date.now();
+            sendColor(pendingColorRef.current);
+            pendingColorRef.current = null;
+          }
+          timeoutRef.current = null;
+        }, remainingTime);
+      }
+    },
+    [setWakeColorHex]
+  );
+
+  const onSelectColor = ({ hex }: { hex: string }) => {
+    "worklet";
+    scheduleOnRN(throttledSendColor, hex);
+  };
 
   const openAddModal = () => {
     setEditingId(null);
@@ -129,7 +198,7 @@ export default function AlarmsScreen() {
 
   const startEditAlarm = (alarm: Alarm) => {
     setEditingId(alarm.id);
-    setTempTime(new Date(alarm.rawTime)); // ✅ no parsing
+    setTempTime(new Date(alarm.rawTime));
     setSelectedDays(alarm.days);
     setModalVisible(true);
   };
@@ -177,9 +246,7 @@ export default function AlarmsScreen() {
 
   const toggleAlarm = (id: string) => {
     setAlarms((prev) =>
-      prev.map((a) =>
-        a.id === id ? { ...a, enabled: !a.enabled } : a
-      )
+      prev.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a))
     );
   };
 
@@ -189,26 +256,89 @@ export default function AlarmsScreen() {
 
   const toggleDay = (day: string) => {
     setSelectedDays((prev) =>
-      prev.includes(day)
-        ? prev.filter((d) => d !== day)
-        : [...prev, day]
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
     );
   };
 
-  // ======================
-  // UI
-  // ======================
+  const listHeader = (
+    <View style={styles.headerBlock}>
+      <Text style={styles.sectionHeading}>Wake-up light</Text>
+      <Text style={styles.sectionSub}>
+        Pick the color the mask uses at the end of the sunrise ramp (MQTT v1 +
+        legacy publish).
+      </Text>
+
+      <ColorPicker
+        style={{ width: "100%", gap: 10, marginTop: 8 }}
+        value={wakeColorHex}
+        onChange={onSelectColor}
+      >
+        <Panel3 />
+        <BrightnessSlider />
+        <Preview hideInitialColor />
+      </ColorPicker>
+
+      <Text style={[styles.sectionHeading, { marginTop: 24 }]}>
+        Sunrise length
+      </Text>
+      <View style={styles.chipRow}>
+        {RAMP_OPTIONS.map((m) => (
+          <TouchableOpacity
+            key={m}
+            style={[
+              styles.chip,
+              sunriseRampMinutes === m && styles.chipSelected,
+            ]}
+            onPress={() => setSunriseRampMinutes(m)}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                sunriseRampMinutes === m && styles.chipTextSelected,
+              ]}
+            >
+              {m} min
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={[styles.sectionHeading, { marginTop: 20 }]}>Snooze</Text>
+      <View style={styles.chipRow}>
+        {SNOOZE_OPTIONS.map((m) => (
+          <TouchableOpacity
+            key={m}
+            style={[styles.chip, snoozeMinutes === m && styles.chipSelected]}
+            onPress={() => setSnoozeMinutes(m)}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                snoozeMinutes === m && styles.chipTextSelected,
+              ]}
+            >
+              {m} min
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.alarmListHeader}>
+        <Text style={styles.headerIcon}>🕒</Text>
+        <Text style={styles.title}>Alarms</Text>
+        <Text style={styles.syncHint}>
+          ESP32 alarm sync (`alarms.replace_all`) comes next.
+        </Text>
+      </View>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerIcon}>🕒</Text>
-        <Text style={styles.title}>Alarms</Text>
-      </View>
-
       <FlatList
         data={alarms}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={listHeader}
         renderItem={({ item }) => (
           <AlarmCard
             alarm={item}
@@ -217,13 +347,13 @@ export default function AlarmsScreen() {
             edit={startEditAlarm}
           />
         )}
+        contentContainerStyle={styles.listContent}
       />
 
       <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
         <Text style={styles.addText}>+ Add New Alarm</Text>
       </TouchableOpacity>
 
-      {/* MODAL */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -231,14 +361,13 @@ export default function AlarmsScreen() {
               {editingId ? "Edit Alarm" : "New Alarm"}
             </Text>
 
-            {/* TIME PICKER */}
             <TouchableOpacity onPress={() => setShowTimePicker(true)}>
               <Text style={{ color: "#2dd4bf", fontSize: 18 }}>
                 Time: {formatTime(tempTime)}
               </Text>
             </TouchableOpacity>
 
-            {showTimePicker && (
+            {showTimePicker ? (
               <DateTimePicker
                 value={tempTime}
                 mode="time"
@@ -250,9 +379,8 @@ export default function AlarmsScreen() {
                   setShowTimePicker(false);
                 }}
               />
-            )}
+            ) : null}
 
-            {/* DAYS */}
             <View style={styles.daysRow}>
               {DAYS.map((day) => (
                 <TouchableOpacity
@@ -268,7 +396,6 @@ export default function AlarmsScreen() {
               ))}
             </View>
 
-            {/* ACTIONS */}
             <View style={{ flexDirection: "row", gap: 20, marginTop: 10 }}>
               <TouchableOpacity onPress={closeModal}>
                 <Text style={{ color: "#aaa" }}>Cancel</Text>
@@ -291,30 +418,71 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
-
-  header: {
+  listContent: {
+    paddingBottom: 100,
+  },
+  headerBlock: {
+    marginBottom: 8,
+  },
+  sectionHeading: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  sectionSub: {
+    color: "#888",
+    fontSize: 13,
+    marginTop: 6,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  chipSelected: {
+    backgroundColor: "#1f3d3a",
+    borderColor: "#2dd4bf",
+  },
+  chipText: {
+    color: "#aaa",
+    fontSize: 14,
+  },
+  chipTextSelected: {
+    color: "#2dd4bf",
+    fontWeight: "600",
+  },
+  alarmListHeader: {
     alignItems: "center",
-    marginBottom: 20,
+    marginTop: 28,
+    marginBottom: 12,
   },
-
   headerIcon: {
     fontSize: 28,
     marginBottom: 5,
   },
-
   title: {
     fontSize: 24,
     fontWeight: "600",
     color: "#fff",
   },
-
-  subtitle: {
-    color: "#aaa",
-    fontSize: 14,
+  syncHint: {
+    color: "#666",
+    fontSize: 12,
+    marginTop: 6,
+    textAlign: "center",
   },
-
   card: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -325,83 +493,62 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 15,
   },
-
   time: {
     fontSize: 26,
     fontWeight: "bold",
     color: "#fff",
   },
-
   label: {
     color: "#aaa",
     marginTop: 4,
     fontSize: 13,
   },
-
   right: {
     justifyContent: "space-between",
     alignItems: "center",
   },
-
   delete: {
     color: "#aaa",
     fontSize: 18,
   },
-
   addButton: {
+    position: "absolute",
+    bottom: 16,
+    left: 20,
+    right: 20,
     borderWidth: 1,
     borderColor: "#555",
     borderStyle: "dashed",
     borderRadius: 12,
     padding: 12,
     alignItems: "center",
-    marginTop: 10,
+    backgroundColor: "#000",
   },
-
   addText: {
     color: "#aaa",
   },
-
-  infoBox: {
-    marginTop: 15,
-    backgroundColor: "#0f2a27",
-    borderColor: "#1f5c56",
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-  },
-
-  infoText: {
-    color: "#7ee7d7",
-    fontSize: 13,
-  },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.8)",
     justifyContent: "center",
     alignItems: "center",
   },
-
   modalContent: {
     backgroundColor: "#111",
     padding: 20,
     borderRadius: 16,
     width: "80%",
   },
-
   modalTitle: {
     color: "#fff",
     fontSize: 18,
     marginBottom: 10,
   },
-
   daysRow: {
     flexDirection: "row",
     marginTop: 8,
     flexWrap: "wrap",
   },
-
   dayPill: {
     backgroundColor: "#1f3d3a",
     paddingHorizontal: 8,
@@ -410,12 +557,10 @@ const styles = StyleSheet.create({
     marginRight: 5,
     marginTop: 5,
   },
-
   dayText: {
     color: "#7ee7d7",
     fontSize: 11,
   },
-
   daySelected: {
     backgroundColor: "#2dd4bf",
   },

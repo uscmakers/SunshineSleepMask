@@ -6,3 +6,6 @@
 .DS_Store
 fp-info-cache
 Sunshine Sleep Mask-backups/
+
+# Firmware credentials (copy mask_microcontroller/secrets.h.example → secrets.h)
+mask_microcontroller/secrets.h
