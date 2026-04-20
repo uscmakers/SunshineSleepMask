@@ -142,6 +142,8 @@ export function initMqtt() {
 
   client.on("error", (err) => {
     console.error("MQTT error", err);
+    // Not every failure emits `close` immediately; keep UI in sync with broker state.
+    emitBroker(false);
   });
 
   client.on("close", () => {
