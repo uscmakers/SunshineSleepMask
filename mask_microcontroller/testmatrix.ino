@@ -15,8 +15,8 @@
  #define PSTR // Make Arduino Due happy
 #endif
 
-#define DATAPIN  4
-#define CLOCKPIN 5
+#define DATAPIN  14
+#define CLOCKPIN 13
 
 // MATRIX DECLARATION:
 // Parameter 1 = width of DotStar matrix
@@ -64,9 +64,9 @@ void setup() {
 
   //-------------- added
   auto cfg = i2s.defaultConfig();
-    cfg.pin_bck = 26;
-    cfg.pin_ws = 25;
-    cfg.pin_data = 27;
+    cfg.pin_bck = 2;
+    cfg.pin_ws = 4;
+    cfg.pin_data = 15;
     i2s.begin(cfg);
 
     a2dp_sink.start("MyMusic");
