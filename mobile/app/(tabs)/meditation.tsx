@@ -16,8 +16,8 @@ type AudioItem = {
 const AUDIO_DATA: AudioItem[] = [
   {
     id: "1",
-    title: "Brown Noise",
-    file: require("../assets/audio/brown-noise.mp3"),
+    title: "Rain Noise",
+    file: require("../../assets/audio/rain-sounds.mp3"),
   },
   
 ];
