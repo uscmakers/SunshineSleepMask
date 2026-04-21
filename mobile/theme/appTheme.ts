@@ -1,5 +1,5 @@
 /**
- * Tokens aligned to Figma file `1UQUWwQltKn4qCp7vTtfPs` (HomePage node 1:5, tab bar 1:301).
+ * Tokens aligned to Figma Design + Figma Make (`WnyGR5v9TMf3SxY65PhAt0` pages: Home, Alarm, AmbientSound, SleepData).
  * Load Inter via `@expo-google-fonts/inter` in `app/_layout.tsx`.
  */
 export const fonts = {
@@ -40,6 +40,10 @@ export const appTheme = {
     warningText: "#f5d78e",
     overlay: "rgba(0,0,0,0.8)",
     tabBarBg: "rgba(23, 23, 23, 0.94)",
+    /** Charts / emphasis (Make uses `teal-500` / `#14b8a6`) */
+    chartTeal: "#14b8a6",
+    chartTealDeep: "#0d9488",
+    chartTealLight: "#2dd4bf",
   },
   radii: {
     sm: 8,
@@ -59,6 +63,8 @@ export const appTheme = {
     /** Major vertical gap between home cards (Figma ~23.993) */
     sectionGap: 24,
     cardPadding: 20,
+    /** Page horizontal padding (`p-6` in Make) */
+    screenPadding: 24,
   },
   type: {
     /** Heading 1 */

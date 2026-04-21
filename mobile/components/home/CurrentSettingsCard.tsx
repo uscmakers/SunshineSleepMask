@@ -39,7 +39,7 @@ export function CurrentSettingsCard({
     <View style={styles.card}>
       <View style={styles.header}>
         <FontAwesome
-          name="heartbeat"
+          name="line-chart"
           size={18}
           color={appTheme.colors.accent}
         />

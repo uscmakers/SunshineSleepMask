@@ -1,12 +1,16 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
 
+/**
+ * App-wide **defaults only** (new alarms, copy hints). Per-alarm sunrise, snooze,
+ * and LED color live on each alarm in `AlarmScheduleContext`.
+ */
 type WakePreferences = {
-  wakeColorHex: string;
-  setWakeColorHex: (hex: string) => void;
-  sunriseRampMinutes: number;
-  setSunriseRampMinutes: (m: number) => void;
-  snoozeMinutes: number;
-  setSnoozeMinutes: (m: number) => void;
+  defaultWakeColorHex: string;
+  setDefaultWakeColorHex: (hex: string) => void;
+  defaultSunriseRampMinutes: number;
+  setDefaultSunriseRampMinutes: (m: number) => void;
+  defaultSnoozeMinutes: number;
+  setDefaultSnoozeMinutes: (m: number) => void;
 };
 
 const WakePreferencesContext = createContext<WakePreferences | null>(null);
@@ -16,20 +20,25 @@ export function WakePreferencesProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [wakeColorHex, setWakeColorHex] = useState("#FFC46B");
-  const [sunriseRampMinutes, setSunriseRampMinutes] = useState(10);
-  const [snoozeMinutes, setSnoozeMinutes] = useState(9);
+  const [defaultWakeColorHex, setDefaultWakeColorHex] = useState("#FFC46B");
+  const [defaultSunriseRampMinutes, setDefaultSunriseRampMinutes] =
+    useState(10);
+  const [defaultSnoozeMinutes, setDefaultSnoozeMinutes] = useState(9);
 
   const value = useMemo(
     () => ({
-      wakeColorHex,
-      setWakeColorHex,
-      sunriseRampMinutes,
-      setSunriseRampMinutes,
-      snoozeMinutes,
-      setSnoozeMinutes,
+      defaultWakeColorHex,
+      setDefaultWakeColorHex,
+      defaultSunriseRampMinutes,
+      setDefaultSunriseRampMinutes,
+      defaultSnoozeMinutes,
+      setDefaultSnoozeMinutes,
     }),
-    [wakeColorHex, sunriseRampMinutes, snoozeMinutes]
+    [
+      defaultWakeColorHex,
+      defaultSunriseRampMinutes,
+      defaultSnoozeMinutes,
+    ]
   );
 
   return (

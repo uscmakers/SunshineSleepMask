@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: appTheme.space.xl,
+    paddingHorizontal: appTheme.space.screenPadding,
     paddingBottom: appTheme.space.xxl + 8,
   },
   fill: {

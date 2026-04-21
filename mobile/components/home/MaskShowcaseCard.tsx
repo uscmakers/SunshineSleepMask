@@ -1,12 +1,16 @@
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 
 import { appTheme } from "@/theme/appTheme";
 
+/** Same Unsplash hero as Figma Make `HomePage.tsx` (sleep mask product photography). */
+const HERO_IMAGE_URI =
+  "https://images.unsplash.com/photo-1614267118647-20134cb33c35?w=1200&h=800&fit=crop&q=80";
+
 /**
- * Simplified stand-in for Figma `SleepMask3D` (vector illustration + drag affordance).
- * Full 3D parity would need the exported asset or a runtime renderer.
+ * Figma Make: photo hero over neutral gradient; model strip below.
+ * 3D “drag to rotate” is not in Expo build — caption kept as product label only.
  */
 export function MaskShowcaseCard() {
   return (
@@ -17,21 +21,13 @@ export function MaskShowcaseCard() {
         end={{ x: 0.5, y: 1 }}
         style={styles.hero}
       >
-        <View style={styles.eyesRow}>
-          <LinearGradient
-            colors={["#ff6467", appTheme.colors.accentEyeInner]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.eye}
-          />
-          <LinearGradient
-            colors={["#ff6467", appTheme.colors.accentEyeInner]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.eye}
-          />
-        </View>
-        <Text style={styles.hint}>Drag to rotate • Sunshine Sleep Mask</Text>
+        <Image
+          source={{ uri: HERO_IMAGE_URI }}
+          style={styles.heroImage}
+          resizeMode="cover"
+          accessibilityLabel="Sunshine Sleep Mask product preview"
+        />
+        <Text style={styles.hint}>Sunshine Sleep Mask</Text>
       </LinearGradient>
       <View style={styles.modelStrip}>
         <Text style={styles.modelLabel}>Model</Text>
@@ -50,28 +46,17 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   hero: {
-    minHeight: 216,
-    paddingTop: 28,
+    paddingTop: 12,
     paddingBottom: 12,
-    alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: 12,
+    alignItems: "stretch",
+    overflow: "hidden",
   },
-  eyesRow: {
-    flexDirection: "row",
-    gap: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  eye: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    shadowColor: "#ef4444",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius: 18,
-    elevation: 12,
+  heroImage: {
+    width: "100%",
+    height: 224,
+    borderRadius: appTheme.radii.md,
+    backgroundColor: appTheme.colors.surfaceRow,
   },
   hint: {
     fontFamily: appTheme.fonts.regular,
@@ -79,6 +64,7 @@ const styles = StyleSheet.create({
     lineHeight: appTheme.type.captionLine,
     color: appTheme.colors.textMuted,
     textAlign: "center",
+    marginTop: 10,
   },
   modelStrip: {
     backgroundColor: appTheme.colors.surface,

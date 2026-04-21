@@ -1,6 +1,7 @@
-import type { MaskTelemetry } from "@/hooks/mqttClient";
+import type { MaskAudioPlayback, MaskTelemetry } from "@/hooks/mqttClient";
 import {
   initMqtt,
+  subscribeMaskAudioState,
   subscribeMaskTelemetry,
   subscribeMqttBrokerState,
 } from "@/hooks/mqttClient";
@@ -19,6 +20,8 @@ type MaskMqttContextValue = {
   /** Recent uplink heartbeat implies mask firmware is reachable. */
   maskReachable: boolean;
   telemetry: MaskTelemetry | null;
+  /** Last `audio.state` from uplink when firmware publishes it. */
+  maskAudio: MaskAudioPlayback | null;
 };
 
 const MaskMqttContext = createContext<MaskMqttContextValue | null>(null);
@@ -26,14 +29,17 @@ const MaskMqttContext = createContext<MaskMqttContextValue | null>(null);
 export function MaskMqttProvider({ children }: { children: React.ReactNode }) {
   const [brokerConnected, setBrokerConnected] = useState(false);
   const [telemetry, setTelemetry] = useState<MaskTelemetry | null>(null);
+  const [maskAudio, setMaskAudio] = useState<MaskAudioPlayback | null>(null);
 
   useEffect(() => {
     initMqtt();
     const unsubT = subscribeMaskTelemetry(setTelemetry);
     const unsubB = subscribeMqttBrokerState(setBrokerConnected);
+    const unsubA = subscribeMaskAudioState(setMaskAudio);
     return () => {
       unsubT();
       unsubB();
+      unsubA();
     };
   }, []);
 
@@ -49,8 +55,9 @@ export function MaskMqttProvider({ children }: { children: React.ReactNode }) {
       brokerConnected,
       maskReachable,
       telemetry,
+      maskAudio,
     }),
-    [brokerConnected, maskReachable, telemetry]
+    [brokerConnected, maskReachable, telemetry, maskAudio]
   );
 
   return (

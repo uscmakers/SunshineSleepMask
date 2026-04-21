@@ -13,11 +13,15 @@ import { appTheme } from "@/theme/appTheme";
 type WakeColorPanelProps = {
   wakeColorHex: string;
   onSelectColorWorklet: (hex: string) => void;
+  title?: string;
+  hint?: string;
 };
 
 export function WakeColorPanel({
   wakeColorHex,
   onSelectColorWorklet,
+  title = "Wake-up light",
+  hint = "Pick the color the mask uses at the end of the sunrise ramp (MQTT v1 + legacy publish).",
 }: WakeColorPanelProps) {
   const onSelectColor = ({ hex }: { hex: string }) => {
     "worklet";
@@ -26,10 +30,7 @@ export function WakeColorPanel({
 
   return (
     <View style={styles.block}>
-      <SectionHeader
-        title="Wake-up light"
-        hint="Pick the color the mask uses at the end of the sunrise ramp (MQTT v1 + legacy publish)."
-      />
+      <SectionHeader title={title} hint={hint} />
       <ColorPicker
         style={styles.picker}
         value={wakeColorHex}

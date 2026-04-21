@@ -24,9 +24,16 @@ export type MaskTelemetry = {
   firmwareVersion: string | null;
 };
 
+export type MaskAudioPlayback = {
+  state: string;
+  trackId: string | null;
+  lastEventAt: number;
+};
+
 let client: MqttClient | null = null;
 const telemetryListeners = new Set<(t: MaskTelemetry) => void>();
 const brokerListeners = new Set<(connected: boolean) => void>();
+const audioListeners = new Set<(a: MaskAudioPlayback) => void>();
 
 function emitTelemetry(t: MaskTelemetry) {
   telemetryListeners.forEach((fn) => fn(t));
@@ -44,6 +51,15 @@ export function subscribeMaskTelemetry(fn: (t: MaskTelemetry) => void) {
 export function subscribeMqttBrokerState(fn: (connected: boolean) => void) {
   brokerListeners.add(fn);
   return () => brokerListeners.delete(fn);
+}
+
+export function subscribeMaskAudioState(fn: (a: MaskAudioPlayback) => void) {
+  audioListeners.add(fn);
+  return () => audioListeners.delete(fn);
+}
+
+function emitAudio(a: MaskAudioPlayback) {
+  audioListeners.forEach((fn) => fn(a));
 }
 
 function newMessageId(): string {
@@ -93,12 +109,43 @@ function parseHeartbeatPayload(raw: string): MaskTelemetry | null {
   }
 }
 
+function parseAudioStatePayload(raw: string): MaskAudioPlayback | null {
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    if (obj.type !== "audio.state") {
+      return null;
+    }
+    const payload =
+      obj.payload && typeof obj.payload === "object"
+        ? (obj.payload as Record<string, unknown>)
+        : null;
+    if (!payload) return null;
+    return {
+      state: typeof payload.state === "string" ? payload.state : "unknown",
+      trackId: typeof payload.trackId === "string" ? payload.trackId : null,
+      lastEventAt: Date.now(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function handleUplinkMessage(topic: string, payload: Buffer) {
   const raw = payload.toString();
   const isHeartbeat =
     topic === MQTT_TOPICS.uplinkHeartbeat ||
     topic.endsWith("/uplink/heartbeat");
   const isLegacyStatus = topic === MQTT_TOPICS.legacyStatus;
+  /** Suffix must include `/` so paths like `foo/uplink/audio` do not match. */
+  const isAudioState = topic.endsWith("/uplink/audio");
+
+  if (isAudioState) {
+    const audio = parseAudioStatePayload(raw);
+    if (audio) {
+      emitAudio(audio);
+    }
+    return;
+  }
 
   if (!isHeartbeat && !isLegacyStatus) {
     return;
@@ -109,6 +156,24 @@ function handleUplinkMessage(topic: string, payload: Buffer) {
     return;
   }
   emitTelemetry(parsed);
+}
+
+/**
+ * Forces a broker reconnect if a client already exists; otherwise initializes MQTT.
+ * Does not change topic payloads or subscription semantics.
+ */
+export function reconnectMqtt(): boolean {
+  try {
+    if (client) {
+      client.reconnect();
+      return true;
+    }
+    initMqtt();
+    return true;
+  } catch (e) {
+    console.error("reconnectMqtt error", e);
+    return false;
+  }
 }
 
 export function initMqtt() {

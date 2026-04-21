@@ -1,34 +1,46 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { TrackRow, type LibraryTrack } from "@/components/sound/TrackRow";
+import {
+  AmbientTrackRow,
+  type AmbientTrack,
+} from "@/components/sound/AmbientTrackRow";
 import { LabeledSlider } from "@/components/sound/LabeledSlider";
+import {
+  SoundSourceTabs,
+  type SoundSourceTab,
+} from "@/components/sound/SoundSourceTabs";
 import { AppScreen } from "@/components/ui/AppScreen";
-import { SectionHeader } from "@/components/ui/SectionHeader";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { sendAudioCommand } from "@/hooks/mqttClient";
+import { useMaskMqtt } from "@/providers/MaskMqttContext";
 import { appTheme } from "@/theme/appTheme";
 
-const AMBIENT: LibraryTrack[] = [
-  { id: "1", title: "Rain", subtitle: "Ambient" },
-  { id: "2", title: "Ocean", subtitle: "Ambient" },
-  { id: "3", title: "Forest night", subtitle: "Ambient" },
-];
-
-const GUIDED: LibraryTrack[] = [
-  { id: "4", title: "Body scan (short)", subtitle: "Guided" },
-];
-
-const SECTIONS: { title: string; data: LibraryTrack[] }[] = [
-  { title: "Ambient", data: AMBIENT },
-  { title: "Guided", data: GUIDED },
+const AMBIENT_TRACKS: AmbientTrack[] = [
+  { id: "1", emoji: "🌧️", title: "Rain Sounds", subtitle: "Gentle rainfall" },
+  { id: "2", emoji: "🌊", title: "Ocean Waves", subtitle: "Calming seaside" },
+  { id: "3", emoji: "🌲", title: "Forest Night", subtitle: "Nature ambience" },
+  { id: "4", emoji: "🔥", title: "Crackling Fire", subtitle: "Warm fireplace" },
+  { id: "5", emoji: "🌙", title: "White Noise", subtitle: "Consistent sound" },
 ];
 
 const DEBOUNCE_MS = 400;
 
 export default function SoundScreen() {
+  const { maskAudio } = useMaskMqtt();
+  const [tab, setTab] = useState<SoundSourceTab>("ambient");
   const [volume, setVolume] = useState(0.45);
   const [sleepTimerMin, setSleepTimerMin] = useState(30);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [commandFeedback, setCommandFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!maskAudio) return;
+    setCommandFeedback(
+      `Device reported: ${maskAudio.state}${maskAudio.trackId ? ` • ${maskAudio.trackId}` : ""}`
+    );
+  }, [maskAudio]);
 
   const volumeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -67,80 +79,114 @@ export default function SoundScreen() {
     [publishSleepTimer]
   );
 
+  const loadTrack = (id: string) => {
+    setSelectedId(id);
+    sendAudioCommand("audio.load", {
+      trackId: `ambient-${id}`,
+      url: "https://example.com/placeholder.mp3",
+      codecHint: "mp3_cbr_128_mono",
+    });
+    setCommandFeedback(`Sent load • ambient-${id} (MQTT)`);
+  };
+
+  const togglePlayback = (id: string) => {
+    if (playingId === id) {
+      setPlayingId(null);
+      sendAudioCommand("audio.pause", { trackId: `ambient-${id}` });
+      setCommandFeedback(`Sent pause • ambient-${id} (MQTT)`);
+      return;
+    }
+    if (selectedId !== id) {
+      loadTrack(id);
+    }
+    setPlayingId(id);
+    sendAudioCommand("audio.play", { trackId: `ambient-${id}` });
+    setCommandFeedback(`Sent play • ambient-${id} (MQTT)`);
+  };
+
   return (
     <AppScreen scroll contentContainerStyle={styles.top}>
-      <Text style={styles.title}>Sounds</Text>
-      <SectionHeader
-        title="Mask playback"
-        hint="Volume and sleep timer map to MQTT v1 audio commands once firmware implements playback."
+      <ScreenHeader
+        icon="music"
+        title="Ambient Sounds"
+        subtitle="Relaxing audio for better sleep"
       />
 
-      <LabeledSlider
-        label="Volume"
-        value={volume}
-        min={0}
-        max={1}
-        step={0.01}
-        formatValue={(v) => `${Math.round(v * 100)}%`}
-        onValueChange={(v) => {
-          setVolume(v);
-          scheduleVolumePublish(v);
-        }}
-        onSlidingComplete={(v) => {
-          if (volumeDebounceRef.current) {
-            clearTimeout(volumeDebounceRef.current);
-            volumeDebounceRef.current = null;
-          }
-          publishVolume(v);
-        }}
-      />
+      <View style={styles.controlCard}>
+        <LabeledSlider
+          label="Volume"
+          value={volume}
+          min={0}
+          max={1}
+          step={0.01}
+          formatValue={(v) => `${Math.round(v * 100)}%`}
+          onValueChange={(v) => {
+            setVolume(v);
+            scheduleVolumePublish(v);
+          }}
+          onSlidingComplete={(v) => {
+            if (volumeDebounceRef.current) {
+              clearTimeout(volumeDebounceRef.current);
+              volumeDebounceRef.current = null;
+            }
+            publishVolume(v);
+          }}
+        />
 
-      <LabeledSlider
-        label="Sleep timer"
-        value={sleepTimerMin}
-        min={0}
-        max={180}
-        step={5}
-        formatValue={(m) => (m === 0 ? "Off" : `${Math.round(m)} min`)}
-        onValueChange={(m) => {
-          setSleepTimerMin(m);
-          scheduleTimerPublish(m);
-        }}
-        onSlidingComplete={(m) => {
-          if (timerDebounceRef.current) {
-            clearTimeout(timerDebounceRef.current);
-            timerDebounceRef.current = null;
-          }
-          publishSleepTimer(m * 60);
-        }}
-      />
-
-      <Text style={styles.section}>Library</Text>
-      <View style={styles.sections}>
-        {SECTIONS.map((section) => (
-          <View key={section.title} style={styles.sectionBlock}>
-            <Text style={styles.sectionLabel}>{section.title}</Text>
-            {section.data.map((item) => {
-              const active = item.id === selectedId;
-              return (
-                <TrackRow
-                  key={item.id}
-                  track={item}
-                  active={active}
-                  onPress={() => {
-                    setSelectedId(item.id);
-                    sendAudioCommand("audio.load", {
-                      trackId: `placeholder-${item.id}`,
-                      url: "https://example.com/placeholder.mp3",
-                      codecHint: "mp3_cbr_128_mono",
-                    });
-                  }}
-                />
-              );
-            })}
-          </View>
-        ))}
+        <LabeledSlider
+          label="Sleep timer"
+          value={sleepTimerMin}
+          min={0}
+          max={120}
+          step={5}
+          formatValue={(m) => (m === 0 ? "Off" : `${Math.round(m)} min`)}
+          onValueChange={(m) => {
+            setSleepTimerMin(m);
+            scheduleTimerPublish(m);
+          }}
+          onSlidingComplete={(m) => {
+            if (timerDebounceRef.current) {
+              clearTimeout(timerDebounceRef.current);
+              timerDebounceRef.current = null;
+            }
+            publishSleepTimer(m * 60);
+          }}
+        />
       </View>
+
+      <SoundSourceTabs active={tab} onChange={setTab} />
+
+      {commandFeedback ? (
+        <View style={styles.feedbackBox}>
+          <Text style={styles.feedbackText}>{commandFeedback}</Text>
+        </View>
+      ) : null}
+
+      {tab === "ambient" ? (
+        <View style={styles.listBlock}>
+          {AMBIENT_TRACKS.map((track) => (
+            <AmbientTrackRow
+              key={track.id}
+              track={track}
+              playing={playingId === track.id}
+              onPressRow={() => loadTrack(track.id)}
+              onPressPlay={() => togglePlayback(track.id)}
+            />
+          ))}
+        </View>
+      ) : (
+        <View style={styles.spotifyCard}>
+          <Text style={styles.spotifyTitle}>Spotify (preview)</Text>
+          <Text style={styles.spotifyBody}>
+            Figma Make includes Spotify browse UI. v1 firmware uses HTTPS URLs
+            (`audio.load`); native Spotify SDK would be a separate product scope
+            (auth, streaming, Expo config).
+          </Text>
+          <Text style={styles.spotifyHint}>
+            Use Ambient Sounds for mask playback experiments today.
+          </Text>
+        </View>
+      )}
     </AppScreen>
   );
 }
@@ -149,34 +195,55 @@ const styles = StyleSheet.create({
   top: {
     paddingTop: appTheme.space.sm,
   },
-  title: {
-    fontFamily: appTheme.fonts.medium,
-    fontSize: appTheme.type.screenTitle,
-    lineHeight: appTheme.type.screenTitleLine,
-    color: appTheme.colors.text,
-    marginBottom: 4,
+  feedbackBox: {
+    backgroundColor: appTheme.colors.surfaceRow,
+    borderRadius: appTheme.radii.md,
+    borderWidth: 1,
+    borderColor: appTheme.colors.borderInner,
+    padding: appTheme.space.md,
+    marginBottom: appTheme.space.md,
   },
-  section: {
-    fontFamily: appTheme.fonts.medium,
-    color: appTheme.colors.text,
-    fontSize: appTheme.type.rowTitle,
-    lineHeight: appTheme.type.rowTitleLine,
-    marginTop: appTheme.space.md,
-    marginBottom: appTheme.space.sm,
-  },
-  sectionLabel: {
+  feedbackText: {
     fontFamily: appTheme.fonts.regular,
-    color: appTheme.colors.textMuted,
     fontSize: appTheme.type.caption,
     lineHeight: appTheme.type.captionLine,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 8,
+    color: appTheme.colors.textSecondary,
   },
-  sectionBlock: {
-    marginBottom: appTheme.space.lg,
+  controlCard: {
+    backgroundColor: appTheme.colors.surface,
+    borderWidth: 1,
+    borderColor: appTheme.colors.border,
+    borderRadius: appTheme.radii.lg,
+    padding: appTheme.space.cardPadding,
+    marginBottom: appTheme.space.md,
   },
-  sections: {
+  listBlock: {
     paddingBottom: appTheme.space.xl,
+  },
+  spotifyCard: {
+    backgroundColor: appTheme.colors.surfaceRow,
+    borderRadius: appTheme.radii.lg,
+    borderWidth: 1,
+    borderColor: appTheme.colors.borderInner,
+    padding: appTheme.space.cardPadding,
+    gap: 10,
+    marginBottom: appTheme.space.xxl,
+  },
+  spotifyTitle: {
+    fontFamily: appTheme.fonts.medium,
+    fontSize: appTheme.type.h3,
+    color: appTheme.colors.text,
+  },
+  spotifyBody: {
+    fontFamily: appTheme.fonts.regular,
+    fontSize: appTheme.type.body,
+    lineHeight: appTheme.type.bodyLine,
+    color: appTheme.colors.textSecondary,
+  },
+  spotifyHint: {
+    fontFamily: appTheme.fonts.regular,
+    fontSize: appTheme.type.caption,
+    lineHeight: appTheme.type.captionLine,
+    color: appTheme.colors.textMuted,
   },
 });

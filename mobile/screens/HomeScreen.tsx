@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import { Link } from "expo-router";
-import React, { useMemo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useMemo } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { CurrentSettingsCard } from "@/components/home/CurrentSettingsCard";
 import { DeviceConnectionCard } from "@/components/home/DeviceConnectionCard";
@@ -9,13 +9,15 @@ import { MaskShowcaseCard } from "@/components/home/MaskShowcaseCard";
 import { SleepSummaryHomeCard } from "@/components/home/SleepSummaryHomeCard";
 import { AppScreen } from "@/components/ui/AppScreen";
 import { WarningBanner } from "@/components/ui/WarningBanner";
+import { reconnectMqtt } from "@/hooks/mqttClient";
+import { useAlarmSchedule } from "@/providers/AlarmScheduleContext";
 import { useMaskMqtt } from "@/providers/MaskMqttContext";
-import { useWakePreferences } from "@/providers/WakePreferencesContext";
 import { appTheme } from "@/theme/appTheme";
+import { nextAlarmSummaryLine } from "@/utils/nextAlarm";
 
 export default function HomeScreen() {
   const { brokerConnected, maskReachable, telemetry } = useMaskMqtt();
-  const { sunriseRampMinutes } = useWakePreferences();
+  const { alarms } = useAlarmSchedule();
 
   const tokenConfigured = Boolean(Constants.expoConfig?.extra?.flespiToken);
   const deviceId =
@@ -39,10 +41,32 @@ export default function HomeScreen() {
     if (!tokenConfigured) {
       return "Add FLESPI_TOKEN to connect";
     }
+    if (brokerConnected && !maskReachable) {
+      return "Tap to connect";
+    }
     return `Sunshine Mask #${deviceId}`;
-  }, [deviceId, tokenConfigured]);
+  }, [brokerConnected, deviceId, maskReachable, tokenConfigured]);
 
-  const nextAlarmLine = `7:00 AM • Gentle Sunrise (${sunriseRampMinutes} min)`;
+  const deviceCardConnected = Boolean(
+    tokenConfigured && brokerConnected && maskReachable
+  );
+
+  const showConnectCta = Boolean(
+    tokenConfigured && brokerConnected && !maskReachable
+  );
+
+  const onConnectPress = useCallback(() => {
+    reconnectMqtt();
+    Alert.alert(
+      "Reconnect requested",
+      "The app asked the MQTT client to reconnect to Flespi. Your mask still needs to be on and publishing uplink heartbeats before status shows Connected."
+    );
+  }, []);
+
+  const nextAlarmLine = useMemo(
+    () => nextAlarmSummaryLine(alarms),
+    [alarms]
+  );
 
   return (
     <AppScreen scroll contentContainerStyle={styles.scroll}>
@@ -60,6 +84,9 @@ export default function HomeScreen() {
           statusTitle={statusTitle}
           statusSubtitle={statusSubtitle}
           batteryPercent={telemetry?.batteryPercent ?? null}
+          connected={deviceCardConnected}
+          showConnectCta={showConnectCta}
+          onConnectPress={showConnectCta ? onConnectPress : undefined}
         />
         <MaskShowcaseCard />
         <CurrentSettingsCard

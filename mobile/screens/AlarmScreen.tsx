@@ -8,87 +8,49 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AlarmEditorModal } from "@/components/alarm/AlarmEditorModal";
-import { AlarmRowCard, type AlarmListItem } from "@/components/alarm/AlarmRowCard";
+import {
+  ExpandableAlarmCard,
+  type AlarmCardModel,
+} from "@/components/alarm/ExpandableAlarmCard";
 import { SunriseSnoozePanels } from "@/components/alarm/SunriseSnoozePanels";
 import { WakeColorPanel } from "@/components/alarm/WakeColorPanel";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { sendColor } from "@/hooks/mqttClient";
+import {
+  formatAlarmTime,
+  formatDaysLabel,
+  useAlarmSchedule,
+} from "@/providers/AlarmScheduleContext";
 import { useWakePreferences } from "@/providers/WakePreferencesContext";
 import { appTheme } from "@/theme/appTheme";
 
 const THROTTLE_INTERVAL_MS = 150;
 
-type Alarm = AlarmListItem & {
-  rawTime: Date;
-  days: string[];
-};
-
-function formatTime(date: Date) {
-  let hours = date.getHours();
-  const minutes = date.getMinutes().toString().padStart(2, "0");
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  return `${hours}:${minutes} ${ampm}`;
-}
-
-function formatDaysLabel(days: string[]) {
-  if (days.length === 0) return "No repeat";
-  if (days.length === 7) return "Every day";
-  const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  const weekends = ["Sat", "Sun"];
-  if (
-    weekdays.every((d) => days.includes(d)) &&
-    !days.includes("Sat") &&
-    !days.includes("Sun")
-  ) {
-    return "Weekdays";
-  }
-  if (weekends.every((d) => days.includes(d)) && days.length === 2) {
-    return "Weekends";
-  }
-  return days.join(", ");
-}
-
 export default function AlarmScreen() {
   const insets = useSafeAreaInsets();
   const {
-    wakeColorHex,
-    setWakeColorHex,
-    sunriseRampMinutes,
-    setSunriseRampMinutes,
-    snoozeMinutes,
-    setSnoozeMinutes,
+    defaultWakeColorHex,
+    setDefaultWakeColorHex,
+    defaultSunriseRampMinutes,
+    setDefaultSunriseRampMinutes,
+    defaultSnoozeMinutes,
+    setDefaultSnoozeMinutes,
   } = useWakePreferences();
 
-  const [alarms, setAlarms] = useState<Alarm[]>([
-    {
-      id: "1",
-      rawTime: new Date(2026, 0, 1, 7, 0),
-      time: formatTime(new Date(2026, 0, 1, 7, 0)),
-      label: "Weekdays",
-      days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-      enabled: true,
-    },
-    {
-      id: "2",
-      rawTime: new Date(2026, 0, 1, 9, 0),
-      time: formatTime(new Date(2026, 0, 1, 9, 0)),
-      label: "Weekends",
-      days: ["Sat", "Sun"],
-      enabled: false,
-    },
-  ]);
+  const { alarms, setAlarms, addAlarm, deleteAlarm, updateAlarm } =
+    useAlarmSchedule();
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [tempTime, setTempTime] = useState<Date>(new Date());
-  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const alarmsRef = useRef(alarms);
+  alarmsRef.current = alarms;
+
+  const [expandedId, setExpandedId] = useState<string | null>("1");
+  const expandedIdRef = useRef<string | null>(expandedId);
+  expandedIdRef.current = expandedId;
 
   const lastSentTimeRef = useRef<number>(0);
-  const pendingColorRef = useRef<string | null>(null);
+  const pendingRef = useRef<{ hex: string; brightness: number } | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -97,22 +59,27 @@ export default function AlarmScreen() {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
-      pendingColorRef.current = null;
+      pendingRef.current = null;
     };
   }, []);
 
+  const flushPendingColor = useCallback(() => {
+    if (pendingRef.current) {
+      const { hex, brightness } = pendingRef.current;
+      sendColor(hex, brightness);
+      pendingRef.current = null;
+    }
+  }, []);
+
   const throttledSendColor = useCallback(
-    (hex: string) => {
-      setWakeColorHex(hex);
-      pendingColorRef.current = hex;
+    (hex: string, brightnessPct: number) => {
+      const brightness = Math.min(1, Math.max(0, brightnessPct / 100));
+      pendingRef.current = { hex, brightness };
       const now = Date.now();
       const timeSinceLastSend = now - lastSentTimeRef.current;
       if (timeSinceLastSend >= THROTTLE_INTERVAL_MS) {
         lastSentTimeRef.current = now;
-        if (pendingColorRef.current) {
-          sendColor(pendingColorRef.current);
-          pendingColorRef.current = null;
-        }
+        flushPendingColor();
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
@@ -123,68 +90,48 @@ export default function AlarmScreen() {
         }
         const remainingTime = THROTTLE_INTERVAL_MS - timeSinceLastSend;
         timeoutRef.current = setTimeout(() => {
-          if (pendingColorRef.current) {
-            lastSentTimeRef.current = Date.now();
-            sendColor(pendingColorRef.current);
-            pendingColorRef.current = null;
-          }
+          lastSentTimeRef.current = Date.now();
+          flushPendingColor();
           timeoutRef.current = null;
         }, remainingTime);
       }
     },
-    [setWakeColorHex]
+    [flushPendingColor]
   );
 
-  const openAddModal = () => {
-    setEditingId(null);
-    setTempTime(new Date());
-    setSelectedDays([]);
-    setModalVisible(true);
-  };
-
-  const startEditAlarm = (alarm: Alarm) => {
-    setEditingId(alarm.id);
-    setTempTime(new Date(alarm.rawTime));
-    setSelectedDays(alarm.days);
-    setModalVisible(true);
-  };
-
-  const closeModal = () => {
-    setModalVisible(false);
-    setEditingId(null);
-    setSelectedDays([]);
-    setShowTimePicker(false);
-    setTempTime(new Date());
-  };
-
-  const saveAlarm = () => {
-    const formatted = formatTime(tempTime);
-    if (editingId) {
+  const onColorPick = useCallback(
+    (hex: string) => {
+      const id = expandedIdRef.current;
+      if (!id) return;
+      const brightness =
+        alarmsRef.current.find((a) => a.id === id)?.ledBrightness ?? 75;
       setAlarms((prev) =>
-        prev.map((a) =>
-          a.id === editingId
-            ? {
-                ...a,
-                rawTime: tempTime,
-                time: formatted,
-                days: selectedDays,
-                label: formatDaysLabel(selectedDays),
-              }
-            : a
-        )
+        prev.map((a) => (a.id === id ? { ...a, ledColor: hex } : a))
       );
-    } else {
-      const newAlarm: Alarm = {
-        id: Date.now().toString(),
-        rawTime: tempTime,
-        time: formatted,
-        label: formatDaysLabel(selectedDays),
-        days: selectedDays,
-        enabled: true,
-      };
-      setAlarms((prev) => [...prev, newAlarm]);
-    }
-    closeModal();
+      throttledSendColor(hex, brightness);
+    },
+    [setAlarms, throttledSendColor]
+  );
+
+  const openAddAlarm = () => {
+    const raw = new Date();
+    raw.setHours(7, 0, 0, 0);
+    const id = `${Date.now()}`;
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    addAlarm({
+      id,
+      rawTime: raw,
+      time: formatAlarmTime(raw),
+      label: formatDaysLabel(days),
+      days,
+      enabled: true,
+      ledColor: defaultWakeColorHex,
+      ledBrightness: 75,
+      sunriseSimulation: "gentle",
+      sunriseDuration: defaultSunriseRampMinutes,
+      snoozeTime: defaultSnoozeMinutes,
+    });
+    setExpandedId(id);
   };
 
   const toggleAlarm = (id: string) => {
@@ -193,39 +140,60 @@ export default function AlarmScreen() {
     );
   };
 
-  const deleteAlarm = (id: string) => {
-    setAlarms((prev) => prev.filter((a) => a.id !== id));
+  const removeAlarm = (id: string) => {
+    deleteAlarm(id);
+    setExpandedId((cur) => (cur === id ? null : cur));
   };
 
-  const toggleDay = (day: string) => {
-    setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-    );
+  const toggleExpand = (id: string) => {
+    setExpandedId((cur) => (cur === id ? null : id));
   };
+
+  const bottomPad = insets.bottom + 88;
 
   const listHeader = (
-    <View style={styles.headerBlock}>
-      <WakeColorPanel
-        wakeColorHex={wakeColorHex}
-        onSelectColorWorklet={throttledSendColor}
+    <View>
+      <ScreenHeader
+        icon="clock-o"
+        title="Alarms"
+        subtitle="Configure your wake-up lights and sounds"
       />
-      <SunriseSnoozePanels
-        sunriseRampMinutes={sunriseRampMinutes}
-        setSunriseRampMinutes={setSunriseRampMinutes}
-        snoozeMinutes={snoozeMinutes}
-        setSnoozeMinutes={setSnoozeMinutes}
-      />
-      <View style={styles.alarmListHeader}>
-        <Text style={styles.headerIcon}>🕒</Text>
-        <Text style={styles.listTitle}>Alarms</Text>
-        <Text style={styles.syncHint}>
-          ESP32 alarm sync (`alarms.replace_all`) comes next.
-        </Text>
+      <View style={styles.defaultsCard}>
+        <SectionHeader
+          title="Defaults for new alarms"
+          hint="Sunrise length, snooze, and color here only seed the next alarm you add. Open an alarm below to change that alarm only."
+        />
+        <SunriseSnoozePanels
+          sunriseRampMinutes={defaultSunriseRampMinutes}
+          setSunriseRampMinutes={setDefaultSunriseRampMinutes}
+          snoozeMinutes={defaultSnoozeMinutes}
+          setSnoozeMinutes={setDefaultSnoozeMinutes}
+        />
+        <WakeColorPanel
+          wakeColorHex={defaultWakeColorHex}
+          onSelectColorWorklet={setDefaultWakeColorHex}
+          title="Default wake color"
+          hint="Starting LED color for new alarms. Does not change existing alarms or preview on the mask until you edit an alarm."
+        />
       </View>
     </View>
   );
 
-  const bottomPad = insets.bottom + 72;
+  const listFooter = (
+    <View>
+      <TouchableOpacity style={styles.addDashed} onPress={openAddAlarm}>
+        <Text style={styles.addText}>+ Add New Alarm</Text>
+      </TouchableOpacity>
+      <View style={styles.infoCard}>
+        <Text style={styles.infoTitle}>Device sync</Text>
+        <Text style={styles.infoBody}>
+          Alarm schedules use MQTT v1 `alarms.replace_all` when firmware is ready.
+          Color and brightness previews publish to `downlink/color` from an expanded
+          alarm.
+        </Text>
+      </View>
+    </View>
+  );
 
   return (
     <AppScreen scroll={false}>
@@ -235,44 +203,76 @@ export default function AlarmScreen() {
           data={alarms}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={listHeader}
+          ListFooterComponent={listFooter}
           renderItem={({ item }) => (
-            <AlarmRowCard
+            <ExpandableAlarmCard
               alarm={item}
-              onToggle={() => toggleAlarm(item.id)}
-              onRemove={() => deleteAlarm(item.id)}
-              onEdit={() => startEditAlarm(item)}
+              expanded={expandedId === item.id}
+              onToggleExpand={() => toggleExpand(item.id)}
+              onToggleEnabled={() => toggleAlarm(item.id)}
+              onRemove={() => removeAlarm(item.id)}
+              onChangeScheduleTime={(d) => {
+                updateAlarm(item.id, {
+                  rawTime: d,
+                  time: formatAlarmTime(d),
+                });
+              }}
+              onToggleScheduleDay={(day) => {
+                const cur = alarmsRef.current.find((a) => a.id === item.id);
+                if (!cur) return;
+                const nextDays = cur.days.includes(day)
+                  ? cur.days.filter((x) => x !== day)
+                  : [...cur.days, day];
+                updateAlarm(item.id, {
+                  days: nextDays,
+                  label: formatDaysLabel(nextDays),
+                });
+              }}
+              onChangeLedColor={(hex) => {
+                setAlarms((prev) =>
+                  prev.map((a) =>
+                    a.id === item.id ? { ...a, ledColor: hex } : a
+                  )
+                );
+                const br =
+                  alarmsRef.current.find((a) => a.id === item.id)
+                    ?.ledBrightness ?? 75;
+                throttledSendColor(hex, br);
+              }}
+              onChangeLedBrightness={(pct) => {
+                setAlarms((prev) =>
+                  prev.map((a) =>
+                    a.id === item.id ? { ...a, ledBrightness: pct } : a
+                  )
+                );
+              }}
+              onSlidingCompleteBrightness={(pct) => {
+                const hex =
+                  alarmsRef.current.find((a) => a.id === item.id)?.ledColor ??
+                  defaultWakeColorHex;
+                throttledSendColor(hex, pct);
+              }}
+              onChangePattern={(p) => {
+                updateAlarm(item.id, { sunriseSimulation: p });
+              }}
+              onChangeSunriseDuration={(m) => {
+                updateAlarm(item.id, { sunriseDuration: m });
+              }}
+              onChangeSnoozeTime={(m) => {
+                updateAlarm(item.id, { snoozeTime: m });
+              }}
+              onColorPick={onColorPick}
             />
           )}
           contentContainerStyle={[
             styles.listContent,
-            { paddingHorizontal: appTheme.space.xl, paddingBottom: bottomPad },
+            {
+              paddingHorizontal: appTheme.space.screenPadding,
+              paddingBottom: bottomPad,
+            },
           ]}
         />
-        <TouchableOpacity
-          style={[
-            styles.addButton,
-            { bottom: 16 + insets.bottom, left: 20, right: 20 },
-          ]}
-          onPress={openAddModal}
-        >
-          <Text style={styles.addText}>+ Add New Alarm</Text>
-        </TouchableOpacity>
       </View>
-
-      <AlarmEditorModal
-        visible={modalVisible}
-        title={editingId ? "Edit Alarm" : "New Alarm"}
-        tempTime={tempTime}
-        onChangeTime={setTempTime}
-        showTimePicker={showTimePicker}
-        setShowTimePicker={setShowTimePicker}
-        selectedDays={selectedDays}
-        onToggleDay={toggleDay}
-        timeLabel={formatTime(tempTime)}
-        onCancel={closeModal}
-        onSave={saveAlarm}
-        saveLabel={editingId ? "Save Changes" : "Save"}
-      />
     </AppScreen>
   );
 }
@@ -288,44 +288,47 @@ const styles = StyleSheet.create({
   listContent: {
     paddingTop: 0,
   },
-  headerBlock: {
-    marginBottom: 8,
+  defaultsCard: {
+    backgroundColor: appTheme.colors.surface,
+    borderRadius: appTheme.radii.lg,
+    borderWidth: 1,
+    borderColor: appTheme.colors.border,
+    padding: appTheme.space.cardPadding,
+    marginBottom: appTheme.space.sectionGap,
   },
-  alarmListHeader: {
-    alignItems: "center",
-    marginTop: appTheme.space.xxl,
-    marginBottom: 12,
-  },
-  headerIcon: {
-    fontSize: 28,
-    marginBottom: 5,
-  },
-  listTitle: {
-    fontFamily: appTheme.fonts.medium,
-    fontSize: appTheme.type.screenTitle,
-    lineHeight: appTheme.type.screenTitleLine,
-    color: appTheme.colors.text,
-  },
-  syncHint: {
-    fontFamily: appTheme.fonts.regular,
-    color: appTheme.colors.textDim,
-    fontSize: appTheme.type.caption,
-    lineHeight: appTheme.type.captionLine,
-    marginTop: 6,
-    textAlign: "center",
-  },
-  addButton: {
-    position: "absolute",
+  addDashed: {
     borderWidth: 1,
     borderColor: appTheme.colors.borderInner,
     borderStyle: "dashed",
     borderRadius: appTheme.radii.md,
-    padding: 12,
+    padding: 14,
     alignItems: "center",
     backgroundColor: appTheme.colors.background,
+    marginBottom: appTheme.space.lg,
   },
   addText: {
     fontFamily: appTheme.fonts.regular,
+    color: appTheme.colors.textSecondary,
+    fontSize: appTheme.type.body,
+  },
+  infoCard: {
+    backgroundColor: appTheme.colors.surfaceRow,
+    borderRadius: appTheme.radii.md,
+    borderWidth: 1,
+    borderColor: appTheme.colors.borderInner,
+    padding: appTheme.space.lg,
+    marginBottom: appTheme.space.xxl,
+  },
+  infoTitle: {
+    fontFamily: appTheme.fonts.medium,
+    fontSize: appTheme.type.body,
+    color: appTheme.colors.text,
+    marginBottom: 6,
+  },
+  infoBody: {
+    fontFamily: appTheme.fonts.regular,
+    fontSize: appTheme.type.caption,
+    lineHeight: appTheme.type.captionLine,
     color: appTheme.colors.textSecondary,
   },
 });

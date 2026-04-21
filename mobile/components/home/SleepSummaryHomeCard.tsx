@@ -36,7 +36,7 @@ export function SleepSummaryHomeCard() {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <FontAwesome name="calendar" size={22} color={appTheme.colors.accent} />
+        <FontAwesome name="moon-o" size={22} color={appTheme.colors.accent} />
         <Text style={styles.headerTitle}>Last Night's Sleep</Text>
       </View>
       <View style={styles.grid}>
