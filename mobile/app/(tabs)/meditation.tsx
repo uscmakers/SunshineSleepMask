@@ -1,8 +1,10 @@
-import { Audio } from "expo-av";
+import { createAudioPlayer, type AudioPlayer } from "expo-audio";
+import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useRef, useState } from "react";
 import {
   FlatList,
-  StyleSheet, Text,
+  StyleSheet,
+  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -10,64 +12,91 @@ import {
 type AudioItem = {
   id: string;
   title: string;
-  file: any;
+  file: number | { uri: string };
+  isUserUpload?: boolean;
 };
 
-const AUDIO_DATA: AudioItem[] = [
+const BUILT_IN_AUDIO: AudioItem[] = [
   {
     id: "1",
-    title: "Rain Noise",
+    title: "Rain Sounds",
     file: require("../../assets/audio/rain-sounds.mp3"),
   },
-  
 ];
 
-export default function MeditationScreen() {
-  const soundRef = useRef<Audio.Sound | null>(null);
+export default function AudioScrollScreen() {
+  const playerRef = useRef<AudioPlayer | null>(null);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [audioData, setAudioData] = useState<AudioItem[]>(BUILT_IN_AUDIO);
 
   useEffect(() => {
     return () => {
-      // cleanup when leaving screen
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
+      playerRef.current?.pause();
+      playerRef.current = null;
     };
   }, []);
 
-  const playSound = async (item: AudioItem) => {
-  try {
-    // Toggle same audio
-    if (currentId === item.id && soundRef.current) {
-      if (isPlaying) {
-        await soundRef.current.pauseAsync();
-        setIsPlaying(false);
-      } else {
-        await soundRef.current.playAsync();
-        setIsPlaying(true);
+  const stopCurrentPlayer = () => {
+    if (playerRef.current) {
+      playerRef.current.pause();
+      playerRef.current = null;
+    }
+  };
+
+  const pickAudioFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["audio/*", "video/mp4", "audio/mp4"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled || !result.assets?.length) {
+        return;
       }
-      return;
+
+      const asset = result.assets[0];
+
+      const newItem: AudioItem = {
+        id: `upload-${Date.now()}`,
+        title: asset.name ?? "Uploaded Audio",
+        file: { uri: asset.uri },
+        isUserUpload: true,
+      };
+
+      setAudioData((prev) => [...prev, newItem]);
+    } catch (error) {
+      console.error("Error picking audio file:", error);
     }
+  };
 
-    // Stop previous
-    if (soundRef.current) {
-      await soundRef.current.unloadAsync();
+  const playSound = (item: AudioItem) => {
+    try {
+      if (currentId === item.id && playerRef.current) {
+        if (isPlaying) {
+          playerRef.current.pause();
+          setIsPlaying(false);
+        } else {
+          playerRef.current.play();
+          setIsPlaying(true);
+        }
+        return;
+      }
+
+      stopCurrentPlayer();
+
+      const player = createAudioPlayer(item.file);
+      player.loop = true;
+      player.play();
+
+      playerRef.current = player;
+      setCurrentId(item.id);
+      setIsPlaying(true);
+    } catch (error) {
+      console.error("Error playing sound:", error);
     }
-
-    const { sound } = await Audio.Sound.createAsync(item.file, {
-      isLooping: true, // ✅ LOOP ENABLED
-    });
-
-    soundRef.current = sound;
-
-    await sound.playAsync();
-    setCurrentId(item.id);
-    setIsPlaying(true);
-  } catch (error) {
-    console.error("Error playing sound:", error);
-  }
-};
+  };
 
   const renderItem = ({ item }: { item: AudioItem }) => {
     const isActive = currentId === item.id;
@@ -81,6 +110,7 @@ export default function MeditationScreen() {
         <Text style={styles.status}>
           {isActive ? (isPlaying ? "Playing" : "Paused") : "Tap to play"}
         </Text>
+        {item.isUserUpload && <Text style={styles.badge}>Uploaded</Text>}
       </TouchableOpacity>
     );
   };
@@ -88,26 +118,25 @@ export default function MeditationScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Meditation Before Bed 🌙</Text>
-
       <Text style={styles.text}>
         What are you most grateful for today?
       </Text>
-
       <Text style={styles.text}>
         Take 3 breaths for that… inhale… exhale…
       </Text>
-
       <Text style={styles.text}>
         What are you excited for tomorrow?
       </Text>
-
       <Text style={styles.footer}>
         Stay present. That’s enough.
       </Text>
-      <Text style={styles.header}>Ambient Sounds</Text>
+
+      <TouchableOpacity style={styles.uploadButton} onPress={pickAudioFile}>
+        <Text style={styles.uploadButtonText}>Upload your own audio</Text>
+      </TouchableOpacity>
 
       <FlatList
-        data={AUDIO_DATA}
+        data={audioData}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -122,12 +151,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#0b0f1a",
     paddingTop: 60,
     paddingHorizontal: 20,
-  },
-  header: {
-    fontSize: 24,
-    color: "white",
-    marginBottom: 20,
-    fontWeight: "600",
   },
   card: {
     backgroundColor: "#1a2238",
@@ -148,15 +171,34 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   text: {
-    color: 'white',
+    color: "white",
     fontSize: 18,
     marginBottom: 15,
-    textAlign: 'center',
+    textAlign: "center",
   },
   footer: {
-    color: 'gray',
+    color: "gray",
     fontSize: 14,
     marginTop: 20,
-    textAlign: 'center',
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  uploadButton: {
+    backgroundColor: "#324376",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  uploadButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  badge: {
+    color: "#c7d2fe",
+    marginTop: 8,
+    fontSize: 12,
   },
 });
