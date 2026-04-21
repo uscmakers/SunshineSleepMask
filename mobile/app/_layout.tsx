@@ -1,3 +1,8 @@
+import {
+  Inter_300Light,
+  Inter_400Regular,
+  Inter_500Medium,
+} from '@expo-google-fonts/inter';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
@@ -26,6 +31,9 @@ export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     ...FontAwesome.font,
+    Inter_300Light,
+    Inter_400Regular,
+    Inter_500Medium,
   });
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
