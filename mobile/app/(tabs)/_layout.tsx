@@ -1,13 +1,13 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { Link, Tabs } from "expo-router";
+import { DarkTheme, ThemeProvider } from "@react-navigation/native";
+import { Tabs } from "expo-router";
 import React from "react";
-import { Pressable } from "react-native";
 
 import { useClientOnlyValue } from "@/components/useClientOnlyValue";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
+import { appTheme } from "@/theme/appTheme";
 
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
   color: string;
@@ -17,52 +17,67 @@ function TabBarIcon(props: {
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
+  const tint = Colors[colorScheme ?? "light"].tint;
 
-  return (
+  const tabs = (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
+        tabBarActiveTintColor: tint,
+        tabBarInactiveTintColor: isDark
+          ? appTheme.colors.textMuted
+          : Colors.light.tabIconDefault,
+        tabBarStyle: isDark
+          ? {
+              backgroundColor: appTheme.colors.tabBarBg,
+              borderTopColor: appTheme.colors.border,
+              borderTopWidth: 1,
+            }
+          : undefined,
+        headerStyle: isDark ? { backgroundColor: "#000" } : undefined,
+        headerTintColor: isDark ? "#fff" : undefined,
+        headerTitleStyle: isDark
+          ? {
+              fontFamily: appTheme.fonts.medium,
+              fontSize: appTheme.type.screenTitle,
+            }
+          : undefined,
+        headerShadowVisible: !isDark,
         headerShown: useClientOnlyValue(false, true),
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Lights",
+          title: "Home",
           tabBarIcon: ({ color }) => (
-            <TabBarIcon name="lightbulb-o" color={color} />
-          ),
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable>
-                {({ pressed }) => (
-                  <FontAwesome
-                    name="info-circle"
-                    size={25}
-                    color={Colors[colorScheme ?? "light"].text}
-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
+            <TabBarIcon name="home" color={color} />
           ),
         }}
       />
-      
       <Tabs.Screen
         name="alarm_clock"
         options={{
-          title: "Alarm Clock",
+          title: "Alarm",
           tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="sound"
         options={{
-          title: "Settings",
-          tabBarIcon: ({ color }) => <TabBarIcon name="cog" color={color} />,
+          title: "Sounds",
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="music" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: "Data",
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="bar-chart" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -76,4 +91,27 @@ export default function TabLayout() {
       />
     </Tabs>
   );
+
+  if (isDark) {
+    return (
+      <ThemeProvider
+        value={{
+          ...DarkTheme,
+          colors: {
+            ...DarkTheme.colors,
+            primary: tint,
+            background: "#000",
+            card: "#000",
+            text: "#fff",
+            border: appTheme.colors.border,
+            notification: tint,
+          },
+        }}
+      >
+        {tabs}
+      </ThemeProvider>
+    );
+  }
+
+  return tabs;
 }
