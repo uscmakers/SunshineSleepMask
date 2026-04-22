@@ -1,57 +1,60 @@
-import { StyleSheet } from "react-native";
-
-import { Text, View } from "@/components/Themed";
-import { initMqtt, sendColor } from "@/hooks/mqttClient";
+import Constants from "expo-constants";
+import { Link } from "expo-router";
 import React, { useEffect, useRef } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { scheduleOnRN } from "react-native-worklets";
-import ColorPicker, {
-  BrightnessSlider,
-  Panel3,
-  Preview,
-} from "reanimated-color-picker";
 
-const THROTTLE_INTERVAL_MS = 150; // Send color every 150ms max
+import { CurrentSettingsCard } from "@/components/home/CurrentSettingsCard";
+import { DeviceConnectionCard } from "@/components/home/DeviceConnectionCard";
+import { MaskShowcaseCard } from "@/components/home/MaskShowcaseCard";
+import { SleepSummaryCard } from "@/components/home/SleepSummaryCard";
+import { WakeLightCard } from "@/components/home/WakeLightCard";
+import { AppScreen } from "@/components/ui/AppScreen";
+import { initMqtt, sendColor } from "@/hooks/mqttClient";
+import { appTheme } from "@/theme/appTheme";
 
-export default function TabOneScreen() {
-  const lastSentTimeRef = useRef<number>(0);
+const THROTTLE_INTERVAL_MS = 150;
+
+export default function HomeScreen() {
+  const lastSentTimeRef = useRef(0);
   const pendingColorRef = useRef<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const tokenOk = Boolean(Constants.expoConfig?.extra?.flespiToken);
+  const deviceId =
+    (Constants.expoConfig?.extra?.deviceId as string | undefined) ?? "sleepmask";
+
+  const statusTitle = !tokenOk ? "Setup required" : "Your mask";
+  const statusSubtitle = !tokenOk
+    ? "Add FLESPI_TOKEN in .env"
+    : `Device #${deviceId}`;
 
   useEffect(() => {
     initMqtt();
     return () => {
-      // Cleanup timeout on unmount
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
   }, []);
 
   const throttledSendColor = (hex: string) => {
-    // Store the latest color
     pendingColorRef.current = hex;
-
     const now = Date.now();
-    const timeSinceLastSend = now - lastSentTimeRef.current;
-
-    // If enough time has passed, send immediately
-    if (timeSinceLastSend >= THROTTLE_INTERVAL_MS) {
+    if (now - lastSentTimeRef.current >= THROTTLE_INTERVAL_MS) {
       lastSentTimeRef.current = now;
       if (pendingColorRef.current) {
         sendColor(pendingColorRef.current);
         pendingColorRef.current = null;
       }
-      // Clear any pending timeout
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
     } else {
-      // Schedule to send after the remaining time (debounce approach)
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      const remainingTime = THROTTLE_INTERVAL_MS - timeSinceLastSend;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      const rem = THROTTLE_INTERVAL_MS - (now - lastSentTimeRef.current);
       timeoutRef.current = setTimeout(() => {
         if (pendingColorRef.current) {
           lastSentTimeRef.current = Date.now();
@@ -59,50 +62,70 @@ export default function TabOneScreen() {
           pendingColorRef.current = null;
         }
         timeoutRef.current = null;
-      }, remainingTime);
+      }, rem);
     }
   };
 
-  const onSelectColor = ({ hex }: { hex: string }) => {
-    "worklet";
-    // Schedule the throttled send on the React Native thread
-    scheduleOnRN(throttledSendColor, hex);
-  };
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Color Picker</Text>
-      <View
-        style={styles.separator}
-        lightColor="#eee"
-        darkColor="rgba(255,255,255,0.1)"
-      />
-      <ColorPicker
-        style={{ width: "70%", gap: 10 }}
-        value="white"
-        onChange={onSelectColor}
-      >
-        <Panel3 />
-        <BrightnessSlider />
-        <Preview hideInitialColor />
-      </ColorPicker>
-    </View>
+    <AppScreen scroll contentContainerStyle={styles.top}>
+      <View style={styles.header}>
+        <Text style={styles.heroTitle}>Sunshine Sleep Mask</Text>
+        <Text style={styles.subtitle}>Your personal sleep companion</Text>
+      </View>
+
+      <View style={styles.stack}>
+        <DeviceConnectionCard
+          statusTitle={statusTitle}
+          statusSubtitle={statusSubtitle}
+          batteryPercent="—"
+          connected={tokenOk}
+        />
+        <MaskShowcaseCard />
+        <CurrentSettingsCard
+          nextAlarmLine="7:00 AM · Weekdays (example)"
+          activeSoundLine="Rain · 30 min timer (example)"
+          nightModeLine="On · low brightness (example)"
+        />
+        <SleepSummaryCard />
+        <WakeLightCard onColorPicked={throttledSendColor} />
+      </View>
+
+      <Link href="/modal" asChild>
+        <Pressable style={styles.link}>
+          <Text style={styles.linkText}>About</Text>
+        </Pressable>
+      </Link>
+    </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  top: { paddingTop: appTheme.space.lg },
+  header: {
     alignItems: "center",
-    justifyContent: "center",
+    paddingTop: 4,
+    marginBottom: appTheme.space.sectionGap,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
+  heroTitle: {
+    fontFamily: appTheme.fonts.medium,
+    fontSize: appTheme.type.heroTitle,
+    lineHeight: appTheme.type.heroTitleLine,
+    color: appTheme.colors.text,
+    textAlign: "center",
   },
-  separator: {
-    marginVertical: 30,
-    height: 1,
-    width: "80%",
+  subtitle: {
+    marginTop: 4,
+    fontFamily: appTheme.fonts.regular,
+    fontSize: appTheme.type.subtitle,
+    lineHeight: appTheme.type.subtitleLine,
+    color: appTheme.colors.textSecondary,
+    textAlign: "center",
+  },
+  stack: { gap: appTheme.space.sectionGap },
+  link: { marginTop: appTheme.space.xxl, paddingVertical: 6, alignSelf: "center" },
+  linkText: {
+    fontFamily: appTheme.fonts.medium,
+    fontSize: 15,
+    color: appTheme.colors.accent,
   },
 });

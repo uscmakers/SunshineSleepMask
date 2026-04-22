@@ -1,61 +1,78 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { Link, Tabs } from "expo-router";
+import { Tabs } from "expo-router";
 import React from "react";
-import { Pressable } from "react-native";
+import { Platform, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useClientOnlyValue } from "@/components/useClientOnlyValue";
-import { useColorScheme } from "@/components/useColorScheme";
-import Colors from "@/constants/Colors";
+import { appTheme } from "@/theme/appTheme";
 
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
+const TAB_BAR_BASE_HEIGHT = 49;
+
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
   color: string;
 }) {
-  return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
+  return <FontAwesome size={24} style={{ marginBottom: 0 }} {...props} />;
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
-        headerShown: useClientOnlyValue(false, true),
+        headerShown: false,
+        tabBarActiveTintColor: appTheme.colors.accent,
+        tabBarInactiveTintColor: appTheme.colors.textMuted,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            backgroundColor: appTheme.colors.tabBarBg,
+            borderTopColor: appTheme.colors.border,
+            height: TAB_BAR_BASE_HEIGHT + insets.bottom,
+            paddingBottom: Math.max(insets.bottom, 8),
+            paddingTop: 6,
+            ...Platform.select({
+              android: { elevation: 0 },
+              default: {
+                shadowOpacity: 0,
+              },
+            }),
+          },
+        ],
+        tabBarLabelStyle: styles.tabBarLabel,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Lights",
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="lightbulb-o" color={color} />
-          ),
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable>
-                {({ pressed }) => (
-                  <FontAwesome
-                    name="info-circle"
-                    size={25}
-                    color={Colors[colorScheme ?? "light"].text}
-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
-          ),
+          title: "Home",
+          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         }}
       />
-      
       <Tabs.Screen
         name="alarm_clock"
         options={{
-          title: "Alarm Clock",
+          title: "Alarm",
           tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="sound"
+        options={{
+          title: "Sound",
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="volume-up" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="data"
+        options={{
+          title: "Data",
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="bar-chart" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -77,3 +94,13 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  tabBarLabel: {
+    fontSize: 11,
+    fontFamily: appTheme.fonts.medium,
+  },
+});

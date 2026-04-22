@@ -16,11 +16,31 @@ type AudioItem = {
   isUserUpload?: boolean;
 };
 
+/** `createAudioPlayer` is not auto-managed; call `release()` to detach native resources (Expo SharedObject). */
+function releaseAudioPlayer(player: AudioPlayer | null | undefined) {
+  if (!player) return;
+  try {
+    player.pause();
+  } catch {
+    // ignore if already torn down
+  }
+  try {
+    player.release();
+  } catch {
+    // ignore double-release
+  }
+}
+
 const BUILT_IN_AUDIO: AudioItem[] = [
   {
     id: "1",
     title: "Rain Sounds",
     file: require("../../assets/audio/rain-sounds.mp3"),
+  },
+  {
+    id: "2",
+    title: "Brown Noise",
+    file: require("../../assets/audio/brown-noise.mp3"),
   },
 ];
 
@@ -32,16 +52,16 @@ export default function AudioScrollScreen() {
 
   useEffect(() => {
     return () => {
-      playerRef.current?.pause();
+      const p = playerRef.current;
       playerRef.current = null;
+      releaseAudioPlayer(p);
     };
   }, []);
 
   const stopCurrentPlayer = () => {
-    if (playerRef.current) {
-      playerRef.current.pause();
-      playerRef.current = null;
-    }
+    const p = playerRef.current;
+    playerRef.current = null;
+    releaseAudioPlayer(p);
   };
 
   const pickAudioFile = async () => {
