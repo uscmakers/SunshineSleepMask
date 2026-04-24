@@ -29,6 +29,9 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "extra": {
+      "spotifyClientId": ""
+    },
     "plugins": [
       "expo-router"
     ],

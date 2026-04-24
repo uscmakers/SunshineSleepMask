@@ -12,6 +12,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import { GlobalAudioProvider } from '@/audio/GlobalAudioContext';
+
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -61,12 +63,13 @@ function RootLayoutNav() {
   // App uses a dark, token-driven layout (`appTheme`); keep navigation in dark mode
   // so modals and nested routes match the Figma spec.
   return (
-    <ThemeProvider value={DarkTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-        
-      </Stack>
-    </ThemeProvider>
+    <GlobalAudioProvider>
+      <ThemeProvider value={DarkTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+        </Stack>
+      </ThemeProvider>
+    </GlobalAudioProvider>
   );
 }
