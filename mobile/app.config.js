@@ -36,8 +36,8 @@ module.exports = {
       typedRoutes: true,
     },
     extra: {
-      flespiToken: process.env.FLESPI_TOKEN,
-      deviceId: process.env.DEVICE_ID,
+      flespiToken: "jhIgc6MC1zVOGzhroq483pUhzXZSRhW9NfQR20OCOMf2Rgb2nmKRpzYPTszjDWCd",
+      deviceId: "esp8266-client",
     },
   },
 };
