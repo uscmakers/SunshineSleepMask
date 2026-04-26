@@ -10,6 +10,7 @@
 #include <SPI.h>
 #include <cstdlib>
 #include <cstring>
+#include <math.h>
 
 #include "secrets.h"
 
@@ -52,6 +53,15 @@ static bool          wasWifiUp       = false;
 static uint8_t g_r = 0, g_g = 0, g_b = 0;  // last commanded RGB (0–255)
 static float   g_brightness = 1.0f;         // 0.0 – 1.0
 
+struct SunriseState {
+  bool active = false;
+  unsigned long startTime = 0;
+  unsigned long durationMs = 0;
+  float maxBrightness = 1.0f;
+};
+
+SunriseState sunrise;
+
 // =====================================================
 void hexToRGB(const char* hexIn, uint8_t& r, uint8_t& g, uint8_t& b);
 void setColorAll(uint8_t r, uint8_t gr, uint8_t b, float brightness);
@@ -66,6 +76,10 @@ void publishAck(const char* type, bool success, const char* errMsg = nullptr);
 void publishStatus(void);
 void publishHeartbeat(void);
 bool copyPayloadToBuffer(byte* payload, unsigned int length, char* out, size_t outSize);
+void lerpColor(float t, uint8_t& r, uint8_t& g, uint8_t& b);
+void startSunrise(int minutes, float brightness);
+void updateSunrise(void);
+void stopSunrise(void);
 
 // =====================================================
 // HEX "#RRGGBB" (or "RRGGBB") -> r, g, b
@@ -208,11 +222,10 @@ void publishAck(const char* type, bool success, const char* errMsg) {
   char buf[256];
   size_t n = serializeJson(doc, buf, sizeof(buf));
   if (n < sizeof(buf) && mqttClient.publish(TOPIC_ACK, buf)) {
-      Serial.print("[ACK] ");
-      Serial.println(buf);
-    } else {
-      Serial.println("[ACK] publish failed (buffer too small or MQTT fault)");
-    }
+    Serial.print("[ACK] ");
+    Serial.println(buf);
+  } else {
+    Serial.println("[ACK] publish failed (buffer too small or MQTT fault)");
   }
 }
 
@@ -273,6 +286,78 @@ bool copyPayloadToBuffer(byte* payload, unsigned int length, char* out, size_t o
   return true;
 }
 
+// ===================== SUNRISE SYSTEM =====================
+
+void lerpColor(float t, uint8_t& r, uint8_t& g, uint8_t& b) {
+  uint8_t colors[][3] = {
+    {10, 0, 0},
+    {120, 20, 0},
+    {255, 80, 0},
+    {255, 180, 80},
+    {255, 240, 200}
+  };
+
+  const int numStops = 5;
+  float scaled = t * (float)(numStops - 1);
+  int idx = (int)floor(scaled);
+  float localT = scaled - (float)idx;
+
+  if (idx >= numStops - 1) {
+    r = colors[numStops - 1][0];
+    g = colors[numStops - 1][1];
+    b = colors[numStops - 1][2];
+    return;
+  }
+
+  r = (uint8_t)((float)colors[idx][0] + (float)(colors[idx + 1][0] - colors[idx][0]) * localT + 0.5f);
+  g = (uint8_t)((float)colors[idx][1] + (float)(colors[idx + 1][1] - colors[idx][1]) * localT + 0.5f);
+  b = (uint8_t)((float)colors[idx][2] + (float)(colors[idx + 1][2] - colors[idx][2]) * localT + 0.5f);
+}
+
+void startSunrise(int minutes, float brightness) {
+  sunrise.active = true;
+  sunrise.startTime = millis();
+  sunrise.durationMs = (unsigned long)minutes * 60000UL;
+  sunrise.maxBrightness = brightness;
+
+  Serial.printf("[SUNRISE] Started: %d min, brightness %.2f\n", minutes, brightness);
+}
+
+void updateSunrise() {
+  if (!sunrise.active) return;
+
+  unsigned long now = millis();
+  unsigned long elapsed = now - sunrise.startTime;
+
+  float progress = (float)elapsed / (float)sunrise.durationMs;
+
+  if (progress >= 1.0f) {
+    progress = 1.0f;
+    sunrise.active = false;
+    Serial.println("[SUNRISE] Complete");
+  }
+
+  float brightnessCurve = pow(progress, 2.2f);
+  float currentBrightness = brightnessCurve * sunrise.maxBrightness;
+
+  uint8_t r, g, b;
+  lerpColor(progress, r, g, b);
+
+  setColorAll(r, g, b, currentBrightness);
+
+  if (!sunrise.active) {
+    g_r = r;
+    g_g = g;
+    g_b = b;
+    g_brightness = currentBrightness;
+  }
+}
+
+void stopSunrise() {
+  sunrise.active = false;
+  Serial.println("[SUNRISE] Stopped");
+}
+
 // Parse {"color":"#FFAA00","brightness":0.5}
 void handleMessage(const char* topic, const char* jsonBuf, size_t jsonLen) {
   (void)jsonLen;  // buffer is null-terminated in mqttCallback; length available if needed
@@ -307,6 +392,7 @@ void handleMessage(const char* topic, const char* jsonBuf, size_t jsonLen) {
 
     uint8_t rr, gg, bb;
     hexToRGB(cstr, rr, gg, bb);
+    stopSunrise();
     g_r          = rr;
     g_g          = gg;
     g_b          = bb;
@@ -324,8 +410,23 @@ void handleMessage(const char* topic, const char* jsonBuf, size_t jsonLen) {
   }
 
   if (strcmp(topic, TOPIC_ALARM) == 0) {
-    Serial.println("[ALARM] payload received; handler not implemented (reserved)");
-    publishAck("alarm", false, "not_implemented");
+    StaticJsonDocument<256> doc;
+    DeserializationError err = deserializeJson(doc, jsonBuf);
+
+    if (err) {
+      publishAck("alarm", false, "invalid_json");
+      return;
+    }
+
+    int duration = doc["sunriseDuration"] | 10;
+    float brightness = (float)(doc["brightness"] | 1.0);
+
+    duration = constrain(duration, 5, 45);
+    if (brightness < 0.0f) brightness = 0.0f;
+    if (brightness > 1.0f) brightness = 1.0f;
+
+    startSunrise(duration, brightness);
+    publishAck("alarm", true, nullptr);
     return;
   }
 
@@ -388,6 +489,8 @@ void loop() {
       publishHeartbeat();
     }
   }
+
+  updateSunrise();
 
   delay(5);
 }
