@@ -1,70 +1,43 @@
 import Constants from "expo-constants";
 import { Link } from "expo-router";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { scheduleOnRN } from "react-native-worklets";
 
-import { CurrentSettingsCard } from "@/components/home/CurrentSettingsCard";
+import { useAlarmContext } from "@/alarm/AlarmContext";
+import { useGlobalAudio } from "@/audio/GlobalAudioContext";
 import { DeviceConnectionCard } from "@/components/home/DeviceConnectionCard";
 import { MaskShowcaseCard } from "@/components/home/MaskShowcaseCard";
-import { SleepSummaryCard } from "@/components/home/SleepSummaryCard";
-import { WakeLightCard } from "@/components/home/WakeLightCard";
 import { AppScreen } from "@/components/ui/AppScreen";
-import { initMqtt, sendColor } from "@/hooks/mqttClient";
+import { initMqtt, subscribeMqttConnection } from "@/hooks/mqttClient";
 import { appTheme } from "@/theme/appTheme";
 
-const THROTTLE_INTERVAL_MS = 150;
-
 export default function HomeScreen() {
-  const lastSentTimeRef = useRef(0);
-  const pendingColorRef = useRef<string | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  const audio = useGlobalAudio();
+  const { getNextEnabledAlarm } = useAlarmContext();
+  const nextAlarm = getNextEnabledAlarm();
   const tokenOk = Boolean(Constants.expoConfig?.extra?.flespiToken);
   const deviceId =
     (Constants.expoConfig?.extra?.deviceId as string | undefined) ?? "sleepmask";
-
-  const statusTitle = !tokenOk ? "Setup required" : "Your mask";
-  const statusSubtitle = !tokenOk
-    ? "Add FLESPI_TOKEN in .env"
-    : `Device #${deviceId}`;
+  const [mqttConnected, setMqttConnected] = useState(false);
 
   useEffect(() => {
+    if (!tokenOk) return;
     initMqtt();
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-    };
-  }, []);
+    return subscribeMqttConnection(({ connected }) => setMqttConnected(connected));
+  }, [tokenOk]);
 
-  const throttledSendColor = (hex: string) => {
-    pendingColorRef.current = hex;
-    const now = Date.now();
-    if (now - lastSentTimeRef.current >= THROTTLE_INTERVAL_MS) {
-      lastSentTimeRef.current = now;
-      if (pendingColorRef.current) {
-        sendColor(pendingColorRef.current);
-        pendingColorRef.current = null;
-      }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-    } else {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      const rem = THROTTLE_INTERVAL_MS - (now - lastSentTimeRef.current);
-      timeoutRef.current = setTimeout(() => {
-        if (pendingColorRef.current) {
-          lastSentTimeRef.current = Date.now();
-          sendColor(pendingColorRef.current);
-          pendingColorRef.current = null;
-        }
-        timeoutRef.current = null;
-      }, rem);
-    }
-  };
+  const statusTitle = !tokenOk ? "Setup required" : mqttConnected ? "Connected" : "Not connected";
+  const statusSubtitle = !tokenOk
+    ? "Add FLESPI_TOKEN in .env"
+    : mqttConnected
+      ? `Connected to SleepMask #${deviceId === "sleepmask" ? "1234" : deviceId}`
+      : "Waiting for heartbeat/status";
+  const sourceLabel = useMemo(() => {
+    if (audio.source === "ambient") return "Ambient";
+    if (audio.source === "meditation") return "Meditation";
+    if (audio.source === "spotify") return "Spotify";
+    return "Idle";
+  }, [audio.source]);
 
   return (
     <AppScreen scroll contentContainerStyle={styles.top}>
@@ -77,17 +50,32 @@ export default function HomeScreen() {
         <DeviceConnectionCard
           statusTitle={statusTitle}
           statusSubtitle={statusSubtitle}
-          batteryPercent="—"
-          connected={tokenOk}
+          batteryPercent="85%"
+          connected={tokenOk && mqttConnected}
         />
         <MaskShowcaseCard />
-        <CurrentSettingsCard
-          nextAlarmLine="7:00 AM · Weekdays (example)"
-          activeSoundLine="Rain · 30 min timer (example)"
-          nightModeLine="On · low brightness (example)"
-        />
-        <SleepSummaryCard />
-        <WakeLightCard onColorPicked={throttledSendColor} />
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Next Alarm</Text>
+          <Text style={styles.cardTitle}>{nextAlarm ? nextAlarm.time : "No alarm enabled"}</Text>
+          <Text style={styles.cardSub}>
+            {nextAlarm ? `${nextAlarm.label} schedule` : "Enable an alarm on the Alarm tab"}
+          </Text>
+        </View>
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Now Playing</Text>
+          <Text style={styles.cardTitle}>{audio.currentTrack ?? "Nothing playing"}</Text>
+          <Text style={styles.cardSub}>{sourceLabel}</Text>
+          {audio.currentTrack ? (
+            <View style={styles.controls}>
+              <Pressable onPress={() => void (audio.isPlaying ? audio.pause() : audio.resume())}>
+                <Text style={styles.controlBtn}>{audio.isPlaying ? "Pause" : "Play"}</Text>
+              </Pressable>
+              <Pressable onPress={() => void audio.stop()}>
+                <Text style={styles.controlBtn}>Stop</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
       </View>
 
       <Link href="/modal" asChild>
@@ -121,7 +109,24 @@ const styles = StyleSheet.create({
     color: appTheme.colors.textSecondary,
     textAlign: "center",
   },
-  stack: { gap: appTheme.space.sectionGap },
+  stack: { gap: 24 },
+  card: {
+    backgroundColor: appTheme.colors.surface,
+    borderWidth: 1,
+    borderColor: appTheme.colors.border,
+    borderRadius: 14,
+    padding: 16,
+  },
+  cardLabel: { color: appTheme.colors.textSecondary, fontSize: 12, fontFamily: appTheme.fonts.medium },
+  cardTitle: {
+    marginTop: 4,
+    color: appTheme.colors.text,
+    fontFamily: appTheme.fonts.medium,
+    fontSize: 18,
+  },
+  cardSub: { marginTop: 4, color: appTheme.colors.textSecondary, fontSize: 13 },
+  controls: { marginTop: 10, flexDirection: "row", gap: 18 },
+  controlBtn: { color: appTheme.colors.accent, fontFamily: appTheme.fonts.medium, fontSize: 14 },
   link: { marginTop: appTheme.space.xxl, paddingVertical: 6, alignSelf: "center" },
   linkText: {
     fontFamily: appTheme.fonts.medium,

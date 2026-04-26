@@ -1,59 +1,78 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AppScreen } from "@/components/ui/AppScreen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { appTheme } from "@/theme/appTheme";
 
-const METRICS: { label: string; value: string }[] = [
-  { label: "Time asleep", value: "7h 42m" },
-  { label: "Quality", value: "89%" },
-  { label: "Deep", value: "1h 52m" },
-  { label: "REM", value: "1h 48m" },
+const METRICS = [
+  { label: "Total Sleep", value: "7.5h", sub: "7-9h goal", bg: "#0891B2" },
+  { label: "Recovery", value: "2.2h", sub: "deep sleep", bg: "#0891B2" },
+  { label: "Interruptions", value: "18 min", sub: "awake time", bg: "#FACC15" },
+  { label: "Avg Heart Rate", value: "58 bpm", sub: "sleeping", bg: "#0891B2" },
+  { label: "Lowest HR", value: "51 bpm", sub: "resting", bg: "#0891B2" },
 ];
 
-const WEEK = [7.5, 8, 6.5, 7, 8.2, 9, 7.8];
-const LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const STAGES = [
+  { label: "Deep", value: "2.2h", color: "#14B8A6" },
+  { label: "Core", value: "3.2h", color: "#0D9488" },
+  { label: "REM", value: "1.8h", color: "#5EEAD4" },
+  { label: "Awake", value: "18m", color: "#3F3F46" },
+];
 
 export default function DataScreen() {
-  const maxH = Math.max(...WEEK);
-
   return (
     <AppScreen scroll contentContainerStyle={styles.top}>
-      <View style={styles.demoBanner}>
-        <Text style={styles.demoText}>
-          Demo data — connect HealthKit or device export for live charts.
-        </Text>
-      </View>
-
       <ScreenHeader
         icon="bar-chart"
-        title="Sleep data"
-        subtitle="Track patterns and quality"
+        title="Sleep Data"
+        subtitle="Last night · 10:00 PM - 6:00 AM"
       />
+      <Text style={styles.demoBadge}>Demo Data</Text>
 
-      <View style={styles.grid}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.metricsRow}
+      >
         {METRICS.map((m) => (
-          <View key={m.label} style={styles.tile}>
-            <Text style={styles.tileLabel}>{m.label}</Text>
-            <Text style={styles.tileValue}>{m.value}</Text>
-          </View>
-        ))}
-      </View>
-
-      <Text style={styles.chartTitle}>Weekly sleep (h)</Text>
-      <View style={styles.bars}>
-        {WEEK.map((h, i) => (
-          <View key={i} style={styles.barCol}>
-            <View style={styles.barTrack}>
-              <View
-                style={[styles.barFill, { height: Math.max(8, (h / maxH) * 100) }]}
-              />
+          <View key={m.label} style={[styles.metricCard, { backgroundColor: m.bg }]}>
+            <Text style={styles.metricLabel}>{m.label} · Demo Data</Text>
+            <View style={styles.metricBottom}>
+              <Text style={styles.metricValue}>{m.value}</Text>
+              <Text style={styles.metricSub}>{m.sub}</Text>
             </View>
-            <Text style={styles.barL}>{LABELS[i]}</Text>
-            <Text style={styles.barV}>{h}h</Text>
           </View>
         ))}
+      </ScrollView>
+
+      <View style={styles.stageCard}>
+        <View style={styles.stageHead}>
+          <Text style={styles.stageTitle}>Sleep Stages · Demo Data</Text>
+          <Text style={styles.detail}>Details ›</Text>
+        </View>
+
+        <View style={styles.segmentTrack}>
+          <View style={[styles.segment, { flex: 22, backgroundColor: "#5EEAD4" }]} />
+          <View style={[styles.segment, { flex: 32, backgroundColor: "#0D9488" }]} />
+          <View style={[styles.segment, { flex: 18, backgroundColor: "#14B8A6" }]} />
+          <View style={[styles.segment, { flex: 18, backgroundColor: "#0F766E" }]} />
+          <View style={[styles.segment, { flex: 10, backgroundColor: "#3F3F46" }]} />
+        </View>
+
+        <View style={styles.legend}>
+          {STAGES.map((s) => (
+            <View key={s.label} style={styles.legendItem}>
+              <View style={[styles.dot, { backgroundColor: s.color }]} />
+              <Text style={styles.legendLabel}>{s.label}</Text>
+              <Text style={styles.legendValue}>{s.value}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={styles.placeholderNote}>
+          Placeholder data shown. TODO: wire to HealthKit/device export once source is defined.
+        </Text>
       </View>
     </AppScreen>
   );
@@ -61,75 +80,105 @@ export default function DataScreen() {
 
 const styles = StyleSheet.create({
   top: { paddingTop: appTheme.space.sm },
-  demoBanner: {
-    backgroundColor: appTheme.colors.warningBg,
-    borderWidth: 1,
-    borderColor: appTheme.colors.warningBorder,
-    borderRadius: appTheme.radii.md,
-    padding: appTheme.space.md,
-    marginBottom: appTheme.space.md,
-  },
-  demoText: {
-    fontFamily: appTheme.fonts.regular,
-    fontSize: appTheme.type.caption,
-    lineHeight: appTheme.type.captionLine,
-    color: appTheme.colors.warningText,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    justifyContent: "space-between",
-    marginBottom: appTheme.space.sectionGap,
-  },
-  tile: {
-    width: "48%",
-    backgroundColor: appTheme.colors.surfaceRow,
-    borderRadius: appTheme.radii.md,
-    borderWidth: 1,
-    borderColor: appTheme.colors.borderInner,
-    padding: appTheme.space.lg,
-  },
-  tileLabel: {
-    fontFamily: appTheme.fonts.regular,
-    fontSize: appTheme.type.body,
-    color: appTheme.colors.textSecondary,
-    marginBottom: 6,
-  },
-  tileValue: {
-    fontFamily: appTheme.fonts.light,
-    fontSize: appTheme.type.metricMd,
-    color: appTheme.colors.text,
-  },
-  chartTitle: {
+  demoBadge: {
+    alignSelf: "flex-start",
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: appTheme.colors.accentTint,
+    color: appTheme.colors.accent,
+    fontSize: 12,
     fontFamily: appTheme.fonts.medium,
-    fontSize: appTheme.type.section,
-    color: appTheme.colors.text,
-    marginBottom: appTheme.space.md,
   },
-  bars: {
+  metricsRow: {
+    gap: 12,
+    paddingBottom: 12,
+  },
+  metricCard: {
+    width: 144,
+    height: 144,
+    borderRadius: 14,
+    padding: 16,
+    justifyContent: "space-between",
+  },
+  metricLabel: {
+    color: "rgba(255,255,255,0.92)",
+    fontFamily: appTheme.fonts.medium,
+    fontSize: 12,
+  },
+  metricBottom: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  metricValue: {
+    color: "#FFFFFF",
+    fontFamily: appTheme.fonts.medium,
+    fontSize: 34 / 1.4,
+  },
+  metricSub: {
+    color: "rgba(255,255,255,0.8)",
+    fontFamily: appTheme.fonts.medium,
+    fontSize: 12,
+  },
+  stageCard: {
+    marginTop: 20,
+    backgroundColor: appTheme.colors.surface,
+    borderWidth: 1,
+    borderColor: appTheme.colors.border,
+    borderRadius: 14,
+    padding: 20,
+  },
+  stageHead: {
     flexDirection: "row",
     justifyContent: "space-between",
-    height: 140,
-    marginBottom: appTheme.space.xxl,
+    alignItems: "center",
+    marginBottom: 18,
   },
-  barCol: { flex: 1, alignItems: "center", marginHorizontal: 2 },
-  barTrack: {
-    width: "100%",
-    height: 100,
-    backgroundColor: appTheme.colors.surfaceRow,
-    borderRadius: appTheme.radii.sm,
-    borderWidth: 1,
-    borderColor: appTheme.colors.borderInner,
-    justifyContent: "flex-end",
+  stageTitle: {
+    color: appTheme.colors.text,
+    fontFamily: appTheme.fonts.medium,
+    fontSize: 32 / 2,
+  },
+  detail: {
+    color: appTheme.colors.accent,
+    fontFamily: appTheme.fonts.medium,
+    fontSize: 28 / 2,
+  },
+  segmentTrack: {
+    height: 42,
+    borderRadius: 22,
     overflow: "hidden",
+    flexDirection: "row",
+    backgroundColor: appTheme.colors.surfaceRow,
   },
-  barFill: {
-    width: "100%",
-    backgroundColor: appTheme.colors.chartTeal,
-    borderTopLeftRadius: appTheme.radii.sm,
-    borderTopRightRadius: appTheme.radii.sm,
+  segment: { height: "100%" },
+  legend: {
+    marginTop: 18,
+    gap: 10,
   },
-  barL: { marginTop: 6, fontSize: 10, color: appTheme.colors.textMuted },
-  barV: { fontSize: 10, color: appTheme.colors.textSecondary },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dot: { width: 12, height: 12, borderRadius: 6 },
+  legendLabel: {
+    width: 54,
+    color: appTheme.colors.textSecondary,
+    fontFamily: appTheme.fonts.regular,
+    fontSize: 14,
+  },
+  legendValue: {
+    color: appTheme.colors.text,
+    fontFamily: appTheme.fonts.medium,
+    fontSize: 15,
+  },
+  placeholderNote: {
+    marginTop: 14,
+    color: appTheme.colors.textMuted,
+    fontFamily: appTheme.fonts.regular,
+    fontSize: 12,
+  },
 });

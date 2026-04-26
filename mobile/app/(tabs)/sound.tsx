@@ -1,15 +1,6 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import React, { useMemo, useState, useRef, useEffect } from "react";
-import * as DocumentPicker from "expo-document-picker";
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  FlatList,
-} from "react-native";
+import React, { useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useGlobalAudio } from "@/audio/GlobalAudioContext";
 import { LabeledSlider } from "@/components/sound/LabeledSlider";
@@ -18,389 +9,238 @@ import { AMBIENT_TRACKS, MEDITATION_TRACKS } from "@/components/sound/soundTrack
 import { AppScreen } from "@/components/ui/AppScreen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { appTheme } from "@/theme/appTheme";
-import { createAudioPlayer, type AudioPlayer } from "expo-audio";
 
 type Tab = "ambient" | "meditation" | "library";
 
-function formatRemaining(sec: number) {
-  if (sec <= 0) return "0:00";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
+function timerLabel(min: number, source: string) {
+  if (min <= 0) return "Off";
+  if (source === "spotify") return `${min} min (Spotify unmanaged)`;
+  return `${min} min`;
 }
-
-type AudioItem = {
-  id: string;
-  title: string;
-  file: number | { uri: string };
-  isUserUpload?: boolean;
-};
-
-/* `createAudioPlayer` is not auto-managed; call `release()` to
-detach native resources (Expo SharedObject). */
-function releaseAudioPlayer(player: AudioPlayer | null | undefined) {
-  if (!player) return;
-  try {
-    player.pause();
-  } catch {
-    // ignore if already torn down
-  }
-  try {
-    player.release();
-  } catch {
-    // ignore double-release
-  }
-}
-
-const BUILT_IN_AUDIO: AudioItem[] = [
-  {
-    id: "1",
-    title: "Rain Sounds",
-    file: require("../../assets/audio/rain-sounds.mp3"),
-  },
-  {
-    id: "2",
-    title: "Brown Noise",
-    file: require("../../assets/audio/brown-noise.mp3"),
-  },
-];
 
 export default function SoundScreen() {
-  const g = useGlobalAudio();
+  const audio = useGlobalAudio();
   const [tab, setTab] = useState<Tab>("ambient");
+  const sourceLabel =
+    audio.source === "ambient"
+      ? "Ambient"
+      : audio.source === "meditation"
+        ? "Meditation"
+        : audio.source === "spotify"
+          ? "Spotify"
+          : "Idle";
 
-  const [audioData, setAudioData] = useState<AudioItem[]>(BUILT_IN_AUDIO);
-  const playerRef = useRef<AudioPlayer | null>(null);
-  const [currentId, setCurrentId] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      const p = playerRef.current;
-      playerRef.current = null;
-      releaseAudioPlayer(p);
-    };
-  }, []);
-
-  const stopCurrentPlayer = () => {
-    const p = playerRef.current;
-    playerRef.current = null;
-    releaseAudioPlayer(p);
-  };
-
-  const pickAudioFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["audio/*", "video/mp4", "audio/mp4"],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (result.canceled || !result.assets?.length) return;
-
-      const asset = result.assets[0];
-
-      const newItem: AudioItem = {
-        id: `upload-${Date.now()}`,
-        title: asset.name ?? "Uploaded Audio",
-        file: { uri: asset.uri },
-        isUserUpload: true,
-      };
-
-      setAudioData((prev) => [...prev, newItem]);
-    } catch (error) {
-      console.error("Error picking audio file:", error);
-    }
-  };
-
-  const playSound = (item: AudioItem) => {
-    try {
-      if (currentId === item.id && playerRef.current) {
-        if (isPlaying) {
-          playerRef.current.pause();
-          setIsPlaying(false);
-        } else {
-          playerRef.current.play();
-          setIsPlaying(true);
-        }
-        return;
-      }
-
-      stopCurrentPlayer();
-
-      const player = createAudioPlayer(item.file);
-      player.loop = true;
-      player.play();
-
-      playerRef.current = player;
-      setCurrentId(item.id);
-      setIsPlaying(true);
-    } catch (error) {
-      console.error("Error playing sound:", error);
-    }
-  };
-
-  // unified data source
-  const listData = useMemo(() => {
-    if (tab === "library") return audioData;
-    return tab === "ambient" ? AMBIENT_TRACKS : MEDITATION_TRACKS;
-  }, [tab, audioData]);
-
-  // unified renderer
-  const renderItem = ({ item }: any) => {
-    if (tab === "library") {
-      const isActive = currentId === item.id;
-
-      return (
-        <TouchableOpacity
-          style={[styles.card, isActive && styles.activeCard]}
-          onPress={() => playSound(item)}
-        >
-          <Text style={styles.title}>{item.title}</Text>
-          <Text style={styles.status}>
-            {isActive ? (isPlaying ? "Playing" : "Paused") : "Tap to play"}
-          </Text>
-          {item.isUserUpload && <Text style={styles.badge}>Uploaded</Text>}
-        </TouchableOpacity>
-      );
-    }
-
-    const isCurrent = g.currentTrackId === item.id;
-    const playing = isCurrent && g.isPlaying;
-
-    return (
-      <Pressable
-        onPress={() =>
-          g.toggleLocalForTrack({
-            id: item.id,
-            title: item.title,
-            file: item.file,
-            loop: item.loop,
-            source: item.source,
-          })
-        }
-        style={[styles.row, isCurrent && styles.rowOn]}
-      >
-        <View style={styles.rowLeft}>
-          <Text style={styles.rowTitle}>{item.title}</Text>
-          <Text style={styles.rowSub}>{item.sub}</Text>
-        </View>
-
-        <View style={styles.pillRow}>
-          <Text style={styles.pillGlyph}>
-            {isCurrent && playing ? "⏸" : "▶"}
-          </Text>
-          <Text style={styles.pillText}>
-            {isCurrent && (g.isPlaying || g.isPaused)
-              ? g.isPlaying
-                ? "Pause"
-                : "Play"
-              : "Play"}
-          </Text>
-        </View>
-      </Pressable>
-    );
-  };
-
-  const nowPlaying = g.currentTrack && g.source !== "idle";
+  const rows = useMemo(
+    () => (tab === "ambient" ? AMBIENT_TRACKS : MEDITATION_TRACKS),
+    [tab]
+  );
 
   return (
     <AppScreen scroll={false}>
-      <FlatList
-        data={listData}
-        keyExtractor={(item: any) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{
-          paddingHorizontal: appTheme.space.screenPadding,
-          paddingBottom: 80,
-        }}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <ScreenHeader
+          icon="music"
+          title="Sounds"
+          subtitle="Choose sounds and music to help you sleep"
+        />
 
-        
-        ListHeaderComponent={
-          <>
-            <ScreenHeader
-              icon="volume-up"
-              title="Sound"
-              subtitle="Ambient, meditation & library"
-            />
+        <View style={styles.sliderCard}>
+          <LabeledSlider
+            label="Volume"
+            value={audio.volume}
+            min={0}
+            max={1}
+            step={0.01}
+            formatValue={(v) => `${Math.round(v * 100)}%`}
+            onValueChange={audio.setVolume}
+          />
+          <LabeledSlider
+            label="Sleep Timer"
+            value={audio.sleepTimerSelectMin}
+            min={0}
+            max={120}
+            step={5}
+            formatValue={(m) => timerLabel(m, audio.source)}
+            onValueChange={audio.setSleepTimerSelectMin}
+          />
+        </View>
 
-            <View style={styles.card}>
-              <LabeledSlider
-                label="Volume"
-                value={g.volume}
-                min={0}
-                max={1}
-                step={0.01}
-                formatValue={(v) => `${Math.round(v * 100)}%`}
-                onValueChange={(v) => g.setVolume(v)}
-              />
-              <LabeledSlider
-                label="Sleep timer"
-                value={g.sleepTimerSelectMin}
-                min={0}
-                max={120}
-                step={5}
-                formatValue={(m) => (m === 0 ? "Off" : `${m} min`)}
-                onValueChange={(m) => g.setSleepTimerSelectMin(m)}
-              />
-            </View>
+        <View style={styles.tabs}>
+          <Pressable
+            onPress={() => setTab("ambient")}
+            style={[styles.tab, tab === "ambient" && styles.tabOn]}
+          >
+            <Text style={[styles.tabText, tab === "ambient" && styles.tabTextOn]}>
+              Ambient Sounds
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setTab("meditation")}
+            style={[styles.tab, tab === "meditation" && styles.tabOn]}
+          >
+            <Text style={[styles.tabText, tab === "meditation" && styles.tabTextOn]}>
+              Meditation
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setTab("library")}
+            style={[styles.tab, tab === "library" && styles.tabOn]}
+          >
+            <Text style={[styles.tabText, tab === "library" && styles.tabTextOn]}>
+              Spotify
+            </Text>
+          </Pressable>
+        </View>
 
-            <View style={styles.tabs}>
-              {["ambient", "meditation", "library"].map((t) => (
+        {tab === "library" ? (
+          <SpotifyLibraryTab />
+        ) : (
+          <View style={styles.rows}>
+            {rows.map((row) => {
+              const current = audio.currentTrackId === row.id;
+              const playing = current && audio.isPlaying;
+              return (
                 <Pressable
-                  key={t}
-                  onPress={() => setTab(t as Tab)}
-                  style={[styles.tab, tab === t && styles.tabOn]}
+                  key={row.id}
+                  onPress={() => {
+                    void audio.toggleLocalForTrack(row);
+                  }}
+                  style={[styles.row, current && styles.rowOn]}
                 >
-                  <Text style={styles.tabText}>{t}</Text>
+                  <Text style={styles.rowTitle}>{row.title}</Text>
+                  <View style={styles.playBtn}>
+                    <FontAwesome
+                      name={playing ? "pause" : "play"}
+                      size={16}
+                      color={playing ? appTheme.colors.accent : appTheme.colors.textSecondary}
+                    />
+                  </View>
                 </Pressable>
-              ))}
-            </View>
+              );
+            })}
+          </View>
+        )}
 
-            {/* 🔥 Library-only header content */}
-            {tab === "library" && (
-              <>
-                <SpotifyLibraryTab />
-                <TouchableOpacity
-                  style={styles.uploadButton}
-                  onPress={pickAudioFile}
-                >
-                  <Text style={styles.uploadButtonText}>
-                    Upload your own audio
-                  </Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </>
-        }
-      />
+        {audio.currentTrack ? (
+          <View style={styles.nowPlaying}>
+            <Text style={styles.nowLabel}>Now Playing</Text>
+            <Text style={styles.nowTrack}>{audio.currentTrack}</Text>
+            <Text style={styles.nowSource}>{sourceLabel}</Text>
+            <View style={styles.controls}>
+              <Pressable onPress={() => void (audio.isPlaying ? audio.pause() : audio.resume())}>
+                <Text style={styles.ctrlText}>{audio.isPlaying ? "Pause" : "Play"}</Text>
+              </Pressable>
+              <Pressable onPress={() => void audio.stop()}>
+                <Text style={styles.ctrlText}>Stop</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        <Text style={styles.bluetoothStatus}>Connected to SleepMask</Text>
+        {audio.source === "spotify" && audio.sleepTimerSelectMin > 0 ? (
+          <Text style={styles.timerHint}>Sleep timer does not control Spotify playback</Text>
+        ) : null}
+      </ScrollView>
     </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  top: { paddingTop: appTheme.space.sm, flex: 1 },
-  scrollView: { flex: 1 },
-  scroll: { paddingBottom: 40 },
-  card: {
+  content: {
+    paddingHorizontal: appTheme.space.screenPadding,
+    paddingBottom: 80,
+  },
+  sliderCard: {
     backgroundColor: appTheme.colors.surface,
     borderWidth: 1,
     borderColor: appTheme.colors.border,
-    borderRadius: appTheme.radii.lg,
-    padding: appTheme.space.cardPadding,
-    marginBottom: appTheme.space.md,
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    marginBottom: 24,
   },
-  timerStatus: {
-    fontFamily: appTheme.fonts.regular,
-    fontSize: appTheme.type.caption,
-    color: appTheme.colors.textSecondary,
-    marginTop: 4,
-  },
-  mutedNote: {
-    marginTop: 6,
-    fontSize: 12,
-    color: appTheme.colors.textMuted,
-  },
-  bluetooth: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: appTheme.space.lg,
-  },
-  bluetoothT: {
-    color: appTheme.colors.textSecondary,
-    fontFamily: appTheme.fonts.regular,
-    fontSize: appTheme.type.caption,
-  },
-  np: {
-    backgroundColor: appTheme.colors.surfaceRow,
-    borderWidth: 1,
-    borderColor: appTheme.colors.accentBorderSoft,
-    borderRadius: appTheme.radii.lg,
-    padding: appTheme.space.lg,
-    marginBottom: appTheme.space.lg,
-  },
-  npLabel: {
-    fontSize: 11,
-    textTransform: "uppercase",
-    color: appTheme.colors.textMuted,
-    marginBottom: 4,
-  },
-  npTitle: { fontFamily: appTheme.fonts.medium, color: appTheme.colors.text, fontSize: 18 },
-  npSource: { color: appTheme.colors.textSecondary, fontSize: 12, marginTop: 2 },
-  npRow: { flexDirection: "row", gap: 20, marginTop: 12 },
-  npBtn: { padding: 4 },
   tabs: {
     flexDirection: "row",
-    backgroundColor: appTheme.colors.surfaceRow,
-    borderRadius: appTheme.radii.md,
+    backgroundColor: appTheme.colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: appTheme.colors.borderInner,
+    borderColor: appTheme.colors.border,
     padding: 4,
     gap: 4,
-    marginBottom: appTheme.space.lg,
+    marginBottom: 24,
   },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: appTheme.radii.sm, alignItems: "center" },
+  tab: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
   tabOn: {
-    backgroundColor: appTheme.colors.surface,
+    backgroundColor: appTheme.colors.accentTint,
     borderWidth: 1,
-    borderColor: appTheme.colors.borderInner,
+    borderColor: appTheme.colors.accentBorderSoft,
   },
   tabText: {
+    color: appTheme.colors.textSecondary,
     fontFamily: appTheme.fonts.medium,
-    fontSize: appTheme.type.label,
-    color: appTheme.colors.textMuted,
+    fontSize: 16,
   },
-  tabTextOn: { color: appTheme.colors.text },
-  tabBody: { minHeight: 120 },
+  tabTextOn: { color: appTheme.colors.accent },
+  rows: { gap: 12 },
   row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderRadius: appTheme.radii.md,
     backgroundColor: appTheme.colors.surface,
     borderWidth: 1,
     borderColor: appTheme.colors.border,
-    marginBottom: 10,
-  },
-  rowOn: { borderColor: appTheme.colors.accent },
-  rowLeft: { flex: 1, minWidth: 0 },
-  rowTitle: { fontFamily: appTheme.fonts.medium, color: appTheme.colors.text, fontSize: 16 },
-  rowSub: { color: appTheme.colors.textSecondary, fontSize: 12, marginTop: 2 },
-  pillRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  pillGlyph: { color: appTheme.colors.accent, fontSize: 16 },
-  pillText: { fontSize: 13, color: appTheme.colors.textSecondary },
-  err: { color: appTheme.colors.warningText, marginTop: 8 },
-  spacer: { height: 24 },
-  uploadButton: {
-    backgroundColor: "#324376",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
     borderRadius: 14,
-    marginBottom: 20,
+    minHeight: 72,
+    paddingHorizontal: 22,
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
   },
-  uploadButtonText: {
-    color: "white",
+  rowOn: { borderColor: appTheme.colors.accentBorderSoft },
+  rowTitle: {
+    color: appTheme.colors.text,
+    fontFamily: appTheme.fonts.medium,
+    fontSize: 32 / 2,
+  },
+  playBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: appTheme.colors.surfaceRow,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: appTheme.colors.borderInner,
+  },
+  nowPlaying: {
+    marginTop: 24,
+    backgroundColor: appTheme.colors.surface,
+    borderWidth: 1,
+    borderColor: appTheme.colors.border,
+    borderRadius: 14,
+    padding: 16,
+  },
+  nowLabel: { color: appTheme.colors.textSecondary, fontSize: 12 },
+  nowTrack: {
+    color: appTheme.colors.text,
+    marginTop: 4,
+    fontFamily: appTheme.fonts.medium,
     fontSize: 16,
-    fontWeight: "600",
   },
-  activeCard: {
-    backgroundColor: "#2e3b6b",
+  nowSource: { marginTop: 3, color: appTheme.colors.textSecondary, fontSize: 12 },
+  controls: { marginTop: 10, flexDirection: "row", gap: 20 },
+  ctrlText: { color: appTheme.colors.accent, fontFamily: appTheme.fonts.medium, fontSize: 14 },
+  bluetoothStatus: {
+    marginTop: 14,
+    color: appTheme.colors.textSecondary,
+    fontSize: 13,
+    textAlign: "center",
   },
-  title: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "500",
-  },
-  status: {
-    color: "#aab",
-    marginTop: 6,
-  },
-  badge: {
-    color: "#c7d2fe",
-    marginTop: 8,
-    fontSize: 12,
-  },
+  timerHint: { marginTop: 10, color: appTheme.colors.textMuted, textAlign: "center", fontSize: 12 },
 });

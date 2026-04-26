@@ -12,6 +12,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import { AlarmProvider } from '@/alarm/AlarmContext';
 import { GlobalAudioProvider } from '@/audio/GlobalAudioContext';
 
 
@@ -64,12 +65,14 @@ function RootLayoutNav() {
   // so modals and nested routes match the Figma spec.
   return (
     <GlobalAudioProvider>
-      <ThemeProvider value={DarkTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-        </Stack>
-      </ThemeProvider>
+      <AlarmProvider>
+        <ThemeProvider value={DarkTheme}>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+          </Stack>
+        </ThemeProvider>
+      </AlarmProvider>
     </GlobalAudioProvider>
   );
 }

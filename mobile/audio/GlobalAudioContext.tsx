@@ -385,6 +385,8 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         return;
       }
       await unloadLocal();
+      clearEnd();
+      clearTick();
       setSt((s) => ({
         ...s,
         isPlaying: false,
@@ -392,6 +394,8 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         currentTrack: title,
         currentTrackId: uri,
         source: "spotify",
+        timerEndAt: null,
+        sleepTimerSecondsRemaining: 0,
       }));
       const res = await spotifyPlayUris(spotifyRef.current.access, [uri]);
       if (!res.ok) {
@@ -400,7 +404,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       }
       setSt((s) => ({ ...s, isPlaying: true, isPaused: false }));
     },
-    [setErr, unloadLocal]
+    [clearEnd, clearTick, setErr, unloadLocal]
   );
 
   const playSpotifyWithBody = useCallback(
@@ -411,6 +415,8 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         return;
       }
       await unloadLocal();
+      clearEnd();
+      clearTick();
       setSt((s) => ({
         ...s,
         isPlaying: false,
@@ -418,6 +424,8 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         currentTrack: title,
         currentTrackId: "spotify:player",
         source: "spotify",
+        timerEndAt: null,
+        sleepTimerSecondsRemaining: 0,
       }));
       const res = await fetch("https://api.spotify.com/v1/me/player/play", {
         method: "PUT",
@@ -433,7 +441,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       }
       setSt((s) => ({ ...s, isPlaying: true, isPaused: false }));
     },
-    [setErr, unloadLocal]
+    [clearEnd, clearTick, setErr, unloadLocal]
   );
 
   const spotifyApiPause = useCallback(async () => {

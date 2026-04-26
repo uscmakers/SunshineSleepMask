@@ -1,26 +1,18 @@
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import React from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { appTheme } from "@/theme/appTheme";
-
-const HERO_IMAGE_URI =
-  "https://images.unsplash.com/photo-1614267118647-20134cb33c35?w=1200&h=800&fit=crop&q=80";
 
 export function MaskShowcaseCard() {
   return (
     <View style={styles.card}>
       <View style={styles.hero}>
-        <Image
-          source={{ uri: HERO_IMAGE_URI }}
-          style={styles.heroImage}
-          resizeMode="cover"
-          accessibilityLabel="Sunshine Sleep Mask"
-        />
-        <Text style={styles.hint}>Sunshine Sleep Mask</Text>
+        <FontAwesome name="image" size={64} color="#0A0A0A" />
       </View>
       <View style={styles.modelStrip}>
         <Text style={styles.modelLabel}>Model</Text>
-        <Text style={styles.modelName}>Sunshine Sleep Mask Pro</Text>
+        <Text style={styles.modelName}>Sunshine Sleep Mask</Text>
       </View>
     </View>
   );
@@ -35,23 +27,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   hero: {
-    paddingTop: 12,
-    paddingBottom: 12,
-    paddingHorizontal: 12,
-  },
-  heroImage: {
-    width: "100%",
-    height: 224,
-    borderRadius: appTheme.radii.md,
-    backgroundColor: appTheme.colors.surfaceRow,
-  },
-  hint: {
-    fontFamily: appTheme.fonts.regular,
-    fontSize: appTheme.type.caption,
-    lineHeight: appTheme.type.captionLine,
-    color: appTheme.colors.textMuted,
-    textAlign: "center",
-    marginTop: 10,
+    height: 244,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
   },
   modelStrip: {
     backgroundColor: appTheme.colors.surface,
