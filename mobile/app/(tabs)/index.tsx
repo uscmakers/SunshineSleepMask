@@ -3,7 +3,7 @@ import { Link } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { useAlarmContext } from "@/alarm/AlarmContext";
+import { formatTime, useAlarmContext } from "@/alarm/AlarmContext";
 import { useGlobalAudio } from "@/audio/GlobalAudioContext";
 import { DeviceConnectionCard } from "@/components/home/DeviceConnectionCard";
 import { MaskShowcaseCard } from "@/components/home/MaskShowcaseCard";
@@ -13,8 +13,16 @@ import { appTheme } from "@/theme/appTheme";
 
 export default function HomeScreen() {
   const audio = useGlobalAudio();
-  const { getNextEnabledAlarm } = useAlarmContext();
-  const nextAlarm = getNextEnabledAlarm();
+  const { getNextScheduledAlarm } = useAlarmContext();
+  const [scheduleTick, setScheduleTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setScheduleTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const nextScheduled = useMemo(() => {
+    void scheduleTick;
+    return getNextScheduledAlarm();
+  }, [getNextScheduledAlarm, scheduleTick]);
   const tokenOk = Boolean(Constants.expoConfig?.extra?.flespiToken);
   const deviceId =
     (Constants.expoConfig?.extra?.deviceId as string | undefined) ?? "sleepmask";
@@ -56,9 +64,13 @@ export default function HomeScreen() {
         <MaskShowcaseCard />
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Next Alarm</Text>
-          <Text style={styles.cardTitle}>{nextAlarm ? nextAlarm.time : "No alarm enabled"}</Text>
+          <Text style={styles.cardTitle}>
+            {nextScheduled ? formatTime(nextScheduled.occursAt) : "No alarm enabled"}
+          </Text>
           <Text style={styles.cardSub}>
-            {nextAlarm ? `${nextAlarm.label} schedule` : "Enable an alarm on the Alarm tab"}
+            {nextScheduled
+              ? `${nextScheduled.alarm.label} · next ring`
+              : "Enable an alarm on the Alarm tab"}
           </Text>
         </View>
         <View style={styles.card}>

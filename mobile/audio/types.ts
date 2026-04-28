@@ -37,9 +37,10 @@ export type GlobalAudioActions = {
   setSleepTimerSelectMin: (m: number) => void;
   clearTimer: () => void;
   setSpotifyAccessToken: (token: string | null) => void;
-  playSpotifyTrack: (uri: string, title: string) => Promise<void>;
+  /** Resolves `null` on success, or a user-facing error message. */
+  playSpotifyTrack: (uri: string, title: string) => Promise<string | null>;
   /** Any JSON body for `PUT /v1/me/player/play` (e.g. context_uri, uris). */
-  playSpotifyWithBody: (body: Record<string, unknown>, title: string) => Promise<void>;
+  playSpotifyWithBody: (body: Record<string, unknown>, title: string) => Promise<string | null>;
   getSpotifyAccessToken: () => string | null;
   spotifyApiPause: () => Promise<void>;
   setSpotifyTokenBundle: (

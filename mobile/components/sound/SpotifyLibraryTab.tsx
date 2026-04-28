@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -28,7 +29,45 @@ export function SpotifyLibraryTab() {
   const [tracks, setTracks] = useState<{ track: SpotifyTrackItem }[]>([]);
   const [playlists, setPlaylists] = useState<SpotifyPlaylistSimplified[]>([]);
   const [shows, setShows] = useState<SpotifyShowItem[]>([]);
+  const [spotifyPlaybackHint, setSpotifyPlaybackHint] = useState<string | null>(null);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const token = g.getSpotifyAccessToken();
+
+  useEffect(() => {
+    return () => {
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    };
+  }, []);
+
+  const showPlayingOnMaskHint = useCallback(() => {
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    setSpotifyPlaybackHint("Playing on SleepMask");
+    hintTimerRef.current = setTimeout(() => setSpotifyPlaybackHint(null), 4000);
+  }, []);
+
+  const playTrack = useCallback(
+    async (uri: string, title: string) => {
+      const err = await g.playSpotifyTrack(uri, title);
+      if (err) {
+        Alert.alert("Spotify", err);
+        return;
+      }
+      showPlayingOnMaskHint();
+    },
+    [g, showPlayingOnMaskHint]
+  );
+
+  const playContext = useCallback(
+    async (body: Record<string, unknown>, title: string) => {
+      const err = await g.playSpotifyWithBody(body, title);
+      if (err) {
+        Alert.alert("Spotify", err);
+        return;
+      }
+      showPlayingOnMaskHint();
+    },
+    [g, showPlayingOnMaskHint]
+  );
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -95,6 +134,12 @@ export function SpotifyLibraryTab() {
 
   return (
     <View>
+      <Text style={styles.helper}>
+        Make sure your SleepMask is connected via Bluetooth and Spotify is open.
+      </Text>
+      {spotifyPlaybackHint ? (
+        <Text style={styles.playbackHint}>{spotifyPlaybackHint}</Text>
+      ) : null}
       {loadErr ? <Text style={styles.err}>{loadErr}</Text> : null}
       {loading ? <ActivityIndicator color={appTheme.colors.accent} /> : null}
       <Text style={styles.sec}>Saved tracks</Text>
@@ -107,7 +152,7 @@ export function SpotifyLibraryTab() {
           <Pressable
             key={t.id}
             style={[styles.row, isOn && styles.rowOn]}
-            onPress={() => void g.playSpotifyTrack(t.uri, t.name)}
+            onPress={() => void playTrack(t.uri, t.name)}
           >
             {art ? (
               <Image source={{ uri: art }} style={styles.thumb} />
@@ -130,9 +175,7 @@ export function SpotifyLibraryTab() {
         <Pressable
           key={pl.id}
           style={styles.row}
-          onPress={() =>
-            void g.playSpotifyWithBody({ context_uri: pl.uri }, pl.name)
-          }
+          onPress={() => void playContext({ context_uri: pl.uri }, pl.name)}
         >
           {pl.images?.[0]?.url ? (
             <Image source={{ uri: pl.images[0].url }} style={styles.thumb} />
@@ -152,9 +195,7 @@ export function SpotifyLibraryTab() {
         <Pressable
           key={sh.id}
           style={styles.row}
-          onPress={() =>
-            void g.playSpotifyWithBody({ context_uri: sh.uri }, sh.name)
-          }
+          onPress={() => void playContext({ context_uri: sh.uri }, sh.name)}
         >
           {sh.images?.[0]?.url ? (
             <Image source={{ uri: sh.images[0].url }} style={styles.thumb} />
@@ -202,6 +243,17 @@ const styles = StyleSheet.create({
     marginTop: appTheme.space.lg,
     color: appTheme.colors.textSecondary,
     fontSize: appTheme.type.caption,
+  },
+  helper: {
+    color: appTheme.colors.textSecondary,
+    fontSize: appTheme.type.caption,
+    marginBottom: appTheme.space.md,
+  },
+  playbackHint: {
+    color: appTheme.colors.accent,
+    fontSize: 13,
+    marginBottom: 8,
+    fontFamily: appTheme.fonts.medium,
   },
   err: { color: appTheme.colors.warningText, marginBottom: 8, fontSize: 13 },
   sec: {

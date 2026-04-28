@@ -12,7 +12,14 @@ import React, {
 } from "react";
 
 import type { GlobalAudioState, GlobalAudioValue, LocalPlayParams } from "@/audio/types";
-import { spotifyPauseWeb, spotifyPlayUris } from "@/spotify/spotifyWebApi";
+import {
+  resolveSpotifyPlaybackDevice,
+  spotifyFriendlyPlayError,
+  spotifyPauseWeb,
+  spotifyPlayUris,
+  spotifyPlayWithBody,
+  spotifyResumeOnDevice,
+} from "@/spotify/spotifyWebApi";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -330,17 +337,18 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
   const resume = useCallback(async () => {
     if (stRef.current.source === "spotify" && spotifyRef.current) {
       try {
-        const res = await fetch("https://api.spotify.com/v1/me/player/play", {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${spotifyRef.current.access}`,
-            "Content-Type": "application/json",
-          },
-        });
+        const token = spotifyRef.current.access;
+        const resolved = await resolveSpotifyPlaybackDevice(token);
+        if (!resolved.ok) {
+          setErr(resolved.message);
+          return;
+        }
+        const res = await spotifyResumeOnDevice(token, resolved.deviceId);
         if (res.status === 204 || res.ok) {
           setSt((s) => ({ ...s, isPlaying: true, isPaused: false }));
         } else {
-          setErr((await res.text()) || "Spotify resume failed");
+          const txt = await res.text();
+          setErr(spotifyFriendlyPlayError(res.status, txt));
         }
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Spotify resume failed");
@@ -378,11 +386,18 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const playSpotifyTrack = useCallback(
-    async (uri: string, title: string) => {
+    async (uri: string, title: string): Promise<string | null> => {
       setErr(null);
       if (!spotifyRef.current) {
-        setErr("Not connected to Spotify");
-        return;
+        const m = "Not connected to Spotify";
+        setErr(m);
+        return m;
+      }
+      const token = spotifyRef.current.access;
+      const resolved = await resolveSpotifyPlaybackDevice(token);
+      if (!resolved.ok) {
+        setErr(resolved.message);
+        return resolved.message;
       }
       await unloadLocal();
       clearEnd();
@@ -397,22 +412,42 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         timerEndAt: null,
         sleepTimerSecondsRemaining: 0,
       }));
-      const res = await spotifyPlayUris(spotifyRef.current.access, [uri]);
+      const res = await spotifyPlayUris(token, [uri], resolved.deviceId);
       if (!res.ok) {
-        setErr((await res.text()) || `Spotify ${res.status}`);
-        return;
+        const txt = await res.text();
+        const msg = spotifyFriendlyPlayError(res.status, txt);
+        setErr(msg);
+        setSt((s) => ({
+          ...s,
+          isPlaying: false,
+          isPaused: false,
+          currentTrack: null,
+          currentTrackId: null,
+          source: "idle",
+          timerEndAt: null,
+          sleepTimerSecondsRemaining: 0,
+        }));
+        return msg;
       }
       setSt((s) => ({ ...s, isPlaying: true, isPaused: false }));
+      return null;
     },
     [clearEnd, clearTick, setErr, unloadLocal]
   );
 
   const playSpotifyWithBody = useCallback(
-    async (body: Record<string, unknown>, title: string) => {
+    async (body: Record<string, unknown>, title: string): Promise<string | null> => {
       setErr(null);
       if (!spotifyRef.current) {
-        setErr("Not connected to Spotify");
-        return;
+        const m = "Not connected to Spotify";
+        setErr(m);
+        return m;
+      }
+      const token = spotifyRef.current.access;
+      const resolved = await resolveSpotifyPlaybackDevice(token);
+      if (!resolved.ok) {
+        setErr(resolved.message);
+        return resolved.message;
       }
       await unloadLocal();
       clearEnd();
@@ -427,19 +462,25 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         timerEndAt: null,
         sleepTimerSecondsRemaining: 0,
       }));
-      const res = await fetch("https://api.spotify.com/v1/me/player/play", {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${spotifyRef.current.access}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
+      const res = await spotifyPlayWithBody(token, body, resolved.deviceId);
       if (!res.ok) {
-        setErr((await res.text()) || `Spotify ${res.status}`);
-        return;
+        const txt = await res.text();
+        const msg = spotifyFriendlyPlayError(res.status, txt);
+        setErr(msg);
+        setSt((s) => ({
+          ...s,
+          isPlaying: false,
+          isPaused: false,
+          currentTrack: null,
+          currentTrackId: null,
+          source: "idle",
+          timerEndAt: null,
+          sleepTimerSecondsRemaining: 0,
+        }));
+        return msg;
       }
       setSt((s) => ({ ...s, isPlaying: true, isPaused: false }));
+      return null;
     },
     [clearEnd, clearTick, setErr, unloadLocal]
   );

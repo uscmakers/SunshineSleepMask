@@ -17,24 +17,23 @@ import { scheduleOnRN } from "react-native-worklets";
 import ColorPicker, { Panel3 } from "reanimated-color-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AlarmDay, AlarmItem, formatDaysLabel, formatTime, useAlarmContext } from "@/alarm/AlarmContext";
+import {
+  AlarmDay,
+  AlarmItem,
+  createDefaultLedSettings,
+  formatDaysLabel,
+  formatTime,
+  useAlarmContext,
+} from "@/alarm/AlarmContext";
+import type { AlarmLedSettings } from "@/alarm/types";
+import { ALARM_DAYS } from "@/alarm/types";
 import { LabeledSlider } from "@/components/sound/LabeledSlider";
 import { AppScreen } from "@/components/ui/AppScreen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { initMqtt, sendAlarmSettings, sendColor } from "@/hooks/mqttClient";
 import { appTheme } from "@/theme/appTheme";
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-type AlarmMode = "sunrise" | "custom";
-type AlarmLedSettings = {
-  mode: AlarmMode;
-  sunriseBrightness: number;
-  sunriseDuration: number;
-  snoozeDuration: number;
-  customBrightness: number;
-  customColor: string;
-  mqttMsg: string | null;
-};
+const DAYS = [...ALARM_DAYS] as string[];
 
 type AlarmCardProps = {
   alarm: AlarmItem;
@@ -61,7 +60,7 @@ function AlarmCard({
   onTestSunrise,
   onTestCustomColor,
 }: AlarmCardProps) {
-  const days = alarm.days.length ? alarm.days : DAYS;
+  const days = alarm.days.length ? alarm.days : [...ALARM_DAYS];
   const colorPresets = ["#FF6B35", "#FFAA66", "#FFD166", "#14B8A6", "#60A5FA"];
   const previewAlpha = Math.max(0.2, settings.customBrightness);
 
@@ -240,7 +239,8 @@ function AlarmCard({
 
 export default function AlarmsScreen() {
   const insets = useSafeAreaInsets();
-  const { alarms, deleteAlarm, toggleAlarm, upsertAlarm } = useAlarmContext();
+  const { alarms, deleteAlarm, toggleAlarm, upsertAlarm, ledSettingsById, updateLedSettings } =
+    useAlarmContext();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -248,19 +248,6 @@ export default function AlarmsScreen() {
   const [tempTime, setTempTime] = useState<Date>(new Date());
   const [selectedDays, setSelectedDays] = useState<AlarmDay[]>([]);
   const [expandedAlarmId, setExpandedAlarmId] = useState<string | null>(null);
-  const [alarmLedSettingsById, setAlarmLedSettingsById] = useState<Record<string, AlarmLedSettings>>(
-    {}
-  );
-
-  const createDefaultLedSettings = (): AlarmLedSettings => ({
-    mode: "sunrise",
-    sunriseBrightness: 0.8,
-    sunriseDuration: 20,
-    snoozeDuration: 10,
-    customBrightness: 0.8,
-    customColor: "#FFAA66",
-    mqttMsg: null,
-  });
 
   useEffect(() => {
     initMqtt();
@@ -273,13 +260,6 @@ export default function AlarmsScreen() {
   }, []);
 
   useEffect(() => {
-    setAlarmLedSettingsById((prev) => {
-      const next: Record<string, AlarmLedSettings> = {};
-      alarms.forEach((alarm) => {
-        next[alarm.id] = prev[alarm.id] ?? createDefaultLedSettings();
-      });
-      return next;
-    });
     setExpandedAlarmId((prev) => (prev && alarms.some((a) => a.id === prev) ? prev : null));
   }, [alarms]);
 
@@ -335,25 +315,18 @@ export default function AlarmsScreen() {
     setExpandedAlarmId((prev) => (prev === alarmId ? null : alarmId));
   };
 
-  const updateAlarmLedSettings = (alarmId: string, next: Partial<AlarmLedSettings>) => {
-    setAlarmLedSettingsById((prev) => ({
-      ...prev,
-      [alarmId]: { ...(prev[alarmId] ?? createDefaultLedSettings()), ...next },
-    }));
-  };
-
   const testSunrise = (alarmId: string) => {
-    const s = alarmLedSettingsById[alarmId] ?? createDefaultLedSettings();
+    const s = ledSettingsById[alarmId] ?? createDefaultLedSettings();
     const ok = sendAlarmSettings(s.sunriseDuration, s.sunriseBrightness);
-    updateAlarmLedSettings(alarmId, {
+    updateLedSettings(alarmId, {
       mqttMsg: ok ? "Sunrise simulation sent to mask." : "Mask not connected yet.",
     });
   };
 
   const testCustomColor = (alarmId: string) => {
-    const s = alarmLedSettingsById[alarmId] ?? createDefaultLedSettings();
+    const s = ledSettingsById[alarmId] ?? createDefaultLedSettings();
     sendColor(s.customColor);
-    updateAlarmLedSettings(alarmId, { mqttMsg: "Custom color test sent to mask." });
+    updateLedSettings(alarmId, { mqttMsg: "Custom color test sent to mask." });
   };
 
   const listHeader = (
@@ -398,8 +371,8 @@ export default function AlarmsScreen() {
               edit={startEditAlarm}
               isExpanded={expandedAlarmId === item.id}
               onToggleExpand={toggleExpandedAlarm}
-              settings={alarmLedSettingsById[item.id] ?? createDefaultLedSettings()}
-              onChangeSettings={updateAlarmLedSettings}
+              settings={ledSettingsById[item.id] ?? createDefaultLedSettings()}
+              onChangeSettings={updateLedSettings}
               onTestSunrise={testSunrise}
               onTestCustomColor={testCustomColor}
             />
