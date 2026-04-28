@@ -41,7 +41,8 @@ export type GlobalAudioActions = {
   playSpotifyTrack: (uri: string, title: string) => Promise<string | null>;
   /** Any JSON body for `PUT /v1/me/player/play` (e.g. context_uri, uris). */
   playSpotifyWithBody: (body: Record<string, unknown>, title: string) => Promise<string | null>;
-  getSpotifyAccessToken: () => string | null;
+  /** Refreshes if expired, then returns an access token or null if logged out. */
+  getSpotifyAccessToken: () => Promise<string | null>;
   spotifyApiPause: () => Promise<void>;
   setSpotifyTokenBundle: (
     bundle: { access: string; refresh: string; expiresAt: number } | null

@@ -1,3 +1,4 @@
+import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -23,7 +24,21 @@ import {
 
 export function SpotifyLibraryTab() {
   const g = useGlobalAudio();
-  const { promptConnect, busy, error, connected, hasClientId } = useSpotifyConnect();
+  const {
+    promptConnect,
+    busy,
+    error,
+    connected,
+    hasClientId,
+    disconnectSpotify,
+    refreshConnection,
+  } = useSpotifyConnect();
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshConnection();
+    }, [refreshConnection])
+  );
   const [loading, setLoading] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [tracks, setTracks] = useState<{ track: SpotifyTrackItem }[]>([]);
@@ -31,7 +46,6 @@ export function SpotifyLibraryTab() {
   const [shows, setShows] = useState<SpotifyShowItem[]>([]);
   const [spotifyPlaybackHint, setSpotifyPlaybackHint] = useState<string | null>(null);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const token = g.getSpotifyAccessToken();
 
   useEffect(() => {
     return () => {
@@ -70,6 +84,7 @@ export function SpotifyLibraryTab() {
   );
 
   const load = useCallback(async () => {
+    const token = await g.getSpotifyAccessToken();
     if (!token) return;
     setLoading(true);
     setLoadErr(null);
@@ -87,7 +102,7 @@ export function SpotifyLibraryTab() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [g]);
 
   useEffect(() => {
     void load();
@@ -110,9 +125,9 @@ export function SpotifyLibraryTab() {
   if (!connected) {
     return (
       <View>
-        {error ? <Text style={styles.err}>{error}</Text> : null}
+        {error && !busy ? <Text style={styles.err}>{error}</Text> : null}
         <Pressable
-          style={styles.btn}
+          style={[styles.btn, busy && styles.btnDisabled]}
           onPress={() => {
             void promptConnect();
           }}
@@ -124,6 +139,12 @@ export function SpotifyLibraryTab() {
             <Text style={styles.btnText}>Connect Spotify</Text>
           )}
         </Pressable>
+        {busy ? (
+          <View style={styles.connectingRow} accessibilityRole="progressbar">
+            <ActivityIndicator color={appTheme.colors.accent} />
+            <Text style={styles.connectingText}>Connecting to Spotify…</Text>
+          </View>
+        ) : null}
         <Text style={styles.note}>
           Premium may be required for API playback. Audio plays in the Spotify app and
           is routed to Bluetooth (e.g. your sleep mask) by iOS.
@@ -134,6 +155,17 @@ export function SpotifyLibraryTab() {
 
   return (
     <View>
+      <View style={styles.connectedRow}>
+        <Text style={styles.connectedLabel}>Connected to Spotify</Text>
+        <Pressable
+          style={styles.disconnectBtn}
+          onPress={() => disconnectSpotify()}
+          accessibilityRole="button"
+          accessibilityLabel="Disconnect Spotify"
+        >
+          <Text style={styles.disconnectBtnText}>Disconnect Spotify</Text>
+        </Pressable>
+      </View>
       <Text style={styles.helper}>
         Make sure your SleepMask is connected via Bluetooth and Spotify is open.
       </Text>
@@ -234,6 +266,45 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: appTheme.radii.md,
     alignItems: "center",
+  },
+  btnDisabled: { opacity: 0.85 },
+  connectingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: appTheme.space.md,
+  },
+  connectingText: {
+    color: appTheme.colors.textSecondary,
+    fontSize: appTheme.type.caption,
+  },
+  connectedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: appTheme.space.md,
+    flexWrap: "wrap",
+  },
+  connectedLabel: {
+    color: appTheme.colors.accent,
+    fontFamily: appTheme.fonts.medium,
+    fontSize: appTheme.type.body,
+    flex: 1,
+    minWidth: 140,
+  },
+  disconnectBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: appTheme.radii.md,
+    borderWidth: 1,
+    borderColor: appTheme.colors.border,
+    backgroundColor: appTheme.colors.surface,
+  },
+  disconnectBtnText: {
+    color: appTheme.colors.textSecondary,
+    fontFamily: appTheme.fonts.medium,
+    fontSize: appTheme.type.caption,
   },
   btnText: {
     color: appTheme.colors.background,

@@ -30,7 +30,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "extra": {
-      "spotifyClientId": ""
+      "spotifyClientId": "3b9de7d64cc548debac19b8a464dfa36"
     },
     "plugins": [
       "expo-router"

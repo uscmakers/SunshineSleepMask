@@ -12,7 +12,9 @@ import React, {
 } from "react";
 
 import type { GlobalAudioState, GlobalAudioValue, LocalPlayParams } from "@/audio/types";
+import { getSpotifyClientId } from "@/spotify/spotifyConfig";
 import {
+  refreshSpotifyAccessToken,
   resolveSpotifyPlaybackDevice,
   spotifyFriendlyPlayError,
   spotifyPauseWeb,
@@ -47,6 +49,8 @@ type SpotifyBundle = { access: string; refresh: string; expiresAt: number };
 
 export function GlobalAudioProvider({ children }: { children: React.ReactNode }) {
   const [st, setSt] = useState<GlobalAudioState>(initial);
+  /** Bumps when Spotify token bundle changes so consumers and getters stay fresh. */
+  const [spotifyGen, setSpotifyGen] = useState(0);
   const soundRef = useRef<Audio.Sound | null>(null);
   const endTimerId = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickId = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -154,13 +158,43 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
     [clearEnd, clearTick, startTick, unloadLocal]
   );
 
+  const refreshSpotifyIfNeeded = useCallback(async () => {
+    const b = spotifyRef.current;
+    if (!b) return;
+    const skewMs = 60_000;
+    if (Date.now() < b.expiresAt - skewMs) return;
+
+    const clientId = getSpotifyClientId();
+    if (!b.refresh || !clientId) {
+      spotifyRef.current = null;
+      setSpotifyGen((g) => g + 1);
+      return;
+    }
+
+    try {
+      const next = await refreshSpotifyAccessToken(clientId, b.refresh);
+      spotifyRef.current = {
+        access: next.access,
+        refresh: next.refresh,
+        expiresAt: next.expiresAt,
+      };
+      setSpotifyGen((g) => g + 1);
+    } catch {
+      spotifyRef.current = null;
+      setSpotifyGen((g) => g + 1);
+    }
+  }, []);
+
   const stop = useCallback(async () => {
     setErr(null);
     clearEnd();
     clearTick();
     if (stRef.current.source === "spotify" && spotifyRef.current) {
       try {
-        await spotifyPauseWeb(spotifyRef.current.access);
+        await refreshSpotifyIfNeeded();
+        if (spotifyRef.current) {
+          await spotifyPauseWeb(spotifyRef.current.access);
+        }
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Spotify stop failed");
       }
@@ -187,7 +221,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       timerEndAt: null,
       sleepTimerSecondsRemaining: 0,
     }));
-  }, [clearEnd, clearTick, setErr, unloadLocal]);
+  }, [clearEnd, clearTick, refreshSpotifyIfNeeded, setErr, unloadLocal]);
 
   useEffect(() => {
     void Audio.setAudioModeAsync({
@@ -249,6 +283,8 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       setErr(null);
       if (stRef.current.source === "spotify" && spotifyRef.current) {
         try {
+          await refreshSpotifyIfNeeded();
+          if (!spotifyRef.current) return;
           await spotifyPauseWeb(spotifyRef.current.access);
         } catch {
           /* */
@@ -281,7 +317,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         setErr(e instanceof Error ? e.message : "Local playback failed");
       }
     },
-    [onPlaybackStatus, rearmLocalTimer, setErr, unloadLocal]
+    [onPlaybackStatus, rearmLocalTimer, refreshSpotifyIfNeeded, setErr, unloadLocal]
   );
 
   const toggleLocalForTrack = useCallback(
@@ -315,7 +351,10 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
   const pause = useCallback(async () => {
     if (stRef.current.source === "spotify" && spotifyRef.current) {
       try {
-        await spotifyPauseWeb(spotifyRef.current.access);
+        await refreshSpotifyIfNeeded();
+        if (spotifyRef.current) {
+          await spotifyPauseWeb(spotifyRef.current.access);
+        }
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Pause failed");
       }
@@ -332,11 +371,13 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         /* */
       }
     }
-  }, [clearEnd, clearTick, setErr]);
+  }, [clearEnd, clearTick, refreshSpotifyIfNeeded, setErr]);
 
   const resume = useCallback(async () => {
     if (stRef.current.source === "spotify" && spotifyRef.current) {
       try {
+        await refreshSpotifyIfNeeded();
+        if (!spotifyRef.current) return;
         const token = spotifyRef.current.access;
         const resolved = await resolveSpotifyPlaybackDevice(token);
         if (!resolved.ok) {
@@ -364,18 +405,20 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         setErr(e instanceof Error ? e.message : "Resume failed");
       }
     }
-  }, [rearmLocalTimer, setErr]);
+  }, [rearmLocalTimer, refreshSpotifyIfNeeded, setErr]);
 
   const setSpotifyTokenBundle = useCallback(
     (b: { access: string; refresh: string; expiresAt: number } | null) => {
       spotifyRef.current = b;
+      setSpotifyGen((g) => g + 1);
     },
     []
   );
 
-  const getSpotifyAccessToken = useCallback((): string | null => {
+  const getSpotifyAccessToken = useCallback(async (): Promise<string | null> => {
+    await refreshSpotifyIfNeeded();
     return spotifyRef.current?.access ?? null;
-  }, []);
+  }, [refreshSpotifyIfNeeded, spotifyGen]);
 
   const setSpotifyAccessToken = useCallback((t: string | null) => {
     if (t) {
@@ -383,11 +426,13 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
     } else {
       spotifyRef.current = null;
     }
+    setSpotifyGen((g) => g + 1);
   }, []);
 
   const playSpotifyTrack = useCallback(
     async (uri: string, title: string): Promise<string | null> => {
       setErr(null);
+      await refreshSpotifyIfNeeded();
       if (!spotifyRef.current) {
         const m = "Not connected to Spotify";
         setErr(m);
@@ -432,12 +477,13 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       setSt((s) => ({ ...s, isPlaying: true, isPaused: false }));
       return null;
     },
-    [clearEnd, clearTick, setErr, unloadLocal]
+    [clearEnd, clearTick, refreshSpotifyIfNeeded, setErr, unloadLocal]
   );
 
   const playSpotifyWithBody = useCallback(
     async (body: Record<string, unknown>, title: string): Promise<string | null> => {
       setErr(null);
+      await refreshSpotifyIfNeeded();
       if (!spotifyRef.current) {
         const m = "Not connected to Spotify";
         setErr(m);
@@ -482,18 +528,20 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       setSt((s) => ({ ...s, isPlaying: true, isPaused: false }));
       return null;
     },
-    [clearEnd, clearTick, setErr, unloadLocal]
+    [clearEnd, clearTick, refreshSpotifyIfNeeded, setErr, unloadLocal]
   );
 
   const spotifyApiPause = useCallback(async () => {
     if (!spotifyRef.current) return;
     try {
+      await refreshSpotifyIfNeeded();
+      if (!spotifyRef.current) return;
       await spotifyPauseWeb(spotifyRef.current.access);
       setSt((s) => ({ ...s, isPlaying: false, isPaused: true }));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Spotify pause failed");
     }
-  }, [setErr]);
+  }, [refreshSpotifyIfNeeded, setErr]);
 
   const value: GlobalAudioValue = useMemo(
     () => ({
@@ -515,6 +563,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
     }),
     [
       st,
+      spotifyGen,
       playLocal,
       toggleLocalForTrack,
       pause,

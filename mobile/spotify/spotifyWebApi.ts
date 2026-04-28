@@ -8,6 +8,48 @@ function authHeader(token: string) {
   return { Authorization: `Bearer ${token}` };
 }
 
+const ACCOUNTS_TOKEN_URL = "https://accounts.spotify.com/api/token";
+
+export type SpotifyTokenBundle = {
+  access: string;
+  refresh: string;
+  expiresAt: number;
+};
+
+/** OAuth refresh — used by GlobalAudioContext; not for Web API resource calls. */
+export async function refreshSpotifyAccessToken(
+  clientId: string,
+  refreshToken: string
+): Promise<SpotifyTokenBundle> {
+  console.log("[Spotify OAuth] refreshing access token");
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: clientId,
+  });
+  const res = await fetch(ACCOUNTS_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  const txt = await res.text();
+  if (!res.ok) {
+    console.warn("[Spotify OAuth] refresh failed", res.status, txt);
+    throw new Error(txt || res.statusText);
+  }
+  const j = JSON.parse(txt) as {
+    access_token: string;
+    expires_in?: number;
+    refresh_token?: string;
+  };
+  console.log("[Spotify OAuth] token received (refresh)");
+  return {
+    access: j.access_token,
+    refresh: j.refresh_token ?? refreshToken,
+    expiresAt: Date.now() + (j.expires_in ?? 3600) * 1000,
+  };
+}
+
 export async function spotifyPauseWeb(token: string): Promise<Response> {
   return fetch(`${API}/me/player/pause`, {
     method: "PUT",
