@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
-import { Link } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { Link, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { formatTime, useAlarmContext } from "@/alarm/AlarmContext";
@@ -35,10 +35,25 @@ export default function HomeScreen() {
   }, [tokenOk]);
 
   const statusTitle = !tokenOk ? "Setup required" : mqttConnected ? "Connected" : "Not connected";
+  /** Prefer plain copy; show a short hardware label instead of raw MQTT client ids. */
+  const connectedSleepMaskSubtitle = useMemo(() => {
+    if (!mqttConnected) return "";
+    const raw = deviceId.trim().replace(/^#/, "");
+    const lower = raw.toLowerCase();
+    const isPlaceholder = raw === "" || lower === "sleepmask" || raw === "1234";
+    if (isPlaceholder) return "Connected to Sleep Mask";
+    const showEspLabel =
+      lower.includes("esp32") ||
+      lower.includes("esp8266") ||
+      lower.includes("esp32-client") ||
+      lower === "esp8266-client";
+    return showEspLabel ? "Connected to Sleep Mask · ESP32" : "Connected to Sleep Mask";
+  }, [mqttConnected, deviceId]);
+
   const statusSubtitle = !tokenOk
     ? "Add FLESPI_TOKEN in .env"
     : mqttConnected
-      ? `Connected to SleepMask #${deviceId === "sleepmask" ? "1234" : deviceId}`
+      ? connectedSleepMaskSubtitle
       : "Waiting for heartbeat/status";
   const sourceLabel = useMemo(() => {
     if (audio.source === "ambient") return "Ambient";
@@ -46,6 +61,12 @@ export default function HomeScreen() {
     if (audio.source === "spotify") return "Spotify";
     return "Idle";
   }, [audio.source]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void audio.refreshSpotifyPlaybackDisplay();
+    }, [audio.refreshSpotifyPlaybackDisplay])
+  );
 
   return (
     <AppScreen scroll contentContainerStyle={styles.top}>
@@ -78,13 +99,45 @@ export default function HomeScreen() {
           <Text style={styles.cardTitle}>{audio.currentTrack ?? "Nothing playing"}</Text>
           <Text style={styles.cardSub}>{sourceLabel}</Text>
           {audio.currentTrack ? (
-            <View style={styles.controls}>
-              <Pressable onPress={() => void (audio.isPlaying ? audio.pause() : audio.resume())}>
-                <Text style={styles.controlBtn}>{audio.isPlaying ? "Pause" : "Play"}</Text>
-              </Pressable>
-              <Pressable onPress={() => void audio.stop()}>
-                <Text style={styles.controlBtn}>Stop</Text>
-              </Pressable>
+            <View style={styles.controlsRow}>
+              <View style={[styles.controlsSide, styles.controlsSideLeft]}>
+                {audio.source === "spotify" ? (
+                  <Pressable
+                    style={styles.ctrlHit}
+                    onPress={() => void audio.spotifySkipPrevious()}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.controlBtn}>Previous</Text>
+                  </Pressable>
+                ) : (
+                  <View style={styles.ctrlHit} />
+                )}
+              </View>
+              <View style={styles.controlsCenterCluster}>
+                <Pressable
+                  style={styles.ctrlHit}
+                  onPress={() => void (audio.isPlaying ? audio.pause() : audio.resume())}
+                  hitSlop={8}
+                >
+                  <Text style={styles.controlBtn}>{audio.isPlaying ? "Pause" : "Play"}</Text>
+                </Pressable>
+                <Pressable style={styles.ctrlHit} onPress={() => void audio.stop()} hitSlop={8}>
+                  <Text style={styles.controlBtn}>Stop</Text>
+                </Pressable>
+              </View>
+              <View style={[styles.controlsSide, styles.controlsSideRight]}>
+                {audio.source === "spotify" ? (
+                  <Pressable
+                    style={styles.ctrlHit}
+                    onPress={() => void audio.spotifySkipNext()}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.controlBtn}>Next</Text>
+                  </Pressable>
+                ) : (
+                  <View style={styles.ctrlHit} />
+                )}
+              </View>
             </View>
           ) : null}
         </View>
@@ -128,16 +181,59 @@ const styles = StyleSheet.create({
     borderColor: appTheme.colors.border,
     borderRadius: 14,
     padding: 16,
+    alignItems: "center",
   },
-  cardLabel: { color: appTheme.colors.textSecondary, fontSize: 12, fontFamily: appTheme.fonts.medium },
+  cardLabel: {
+    color: appTheme.colors.textSecondary,
+    fontSize: 12,
+    fontFamily: appTheme.fonts.medium,
+    textAlign: "center",
+    alignSelf: "stretch",
+  },
   cardTitle: {
     marginTop: 4,
     color: appTheme.colors.text,
     fontFamily: appTheme.fonts.medium,
     fontSize: 18,
+    textAlign: "center",
+    alignSelf: "stretch",
   },
-  cardSub: { marginTop: 4, color: appTheme.colors.textSecondary, fontSize: 13 },
-  controls: { marginTop: 10, flexDirection: "row", gap: 18 },
+  cardSub: {
+    marginTop: 4,
+    color: appTheme.colors.textSecondary,
+    fontSize: 13,
+    textAlign: "center",
+    alignSelf: "stretch",
+  },
+  controlsRow: {
+    marginTop: 14,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  controlsSide: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 44,
+  },
+  controlsSideLeft: { justifyContent: "flex-start" },
+  controlsSideRight: { justifyContent: "flex-end" },
+  controlsCenterCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 18,
+    flexShrink: 0,
+    minHeight: 44,
+  },
+  ctrlHit: {
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 2,
+  },
   controlBtn: { color: appTheme.colors.accent, fontFamily: appTheme.fonts.medium, fontSize: 14 },
   link: { marginTop: appTheme.space.xxl, paddingVertical: 6, alignSelf: "center" },
   linkText: {

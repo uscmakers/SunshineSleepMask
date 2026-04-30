@@ -1,5 +1,6 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import React, { useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useGlobalAudio } from "@/audio/GlobalAudioContext";
@@ -12,15 +13,20 @@ import { appTheme } from "@/theme/appTheme";
 
 type Tab = "ambient" | "meditation" | "library";
 
-function timerLabel(min: number, source: string) {
+function timerLabel(min: number) {
   if (min <= 0) return "Off";
-  if (source === "spotify") return `${min} min (Spotify unmanaged)`;
   return `${min} min`;
 }
 
 export default function SoundScreen() {
   const audio = useGlobalAudio();
   const [tab, setTab] = useState<Tab>("ambient");
+
+  useFocusEffect(
+    useCallback(() => {
+      void audio.refreshSpotifyPlaybackDisplay();
+    }, [audio.refreshSpotifyPlaybackDisplay])
+  );
   const sourceLabel =
     audio.source === "ambient"
       ? "Ambient"
@@ -38,6 +44,7 @@ export default function SoundScreen() {
   return (
     <AppScreen scroll={false}>
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -63,7 +70,7 @@ export default function SoundScreen() {
             min={0}
             max={120}
             step={5}
-            formatValue={(m) => timerLabel(m, audio.source)}
+            formatValue={(m) => timerLabel(m)}
             onValueChange={audio.setSleepTimerSelectMin}
           />
         </View>
@@ -73,27 +80,69 @@ export default function SoundScreen() {
             onPress={() => setTab("ambient")}
             style={[styles.tab, tab === "ambient" && styles.tabOn]}
           >
-            <Text style={[styles.tabText, tab === "ambient" && styles.tabTextOn]}>
-              Ambient Sounds
-            </Text>
+            <Text style={styles.tabText}>Ambient Sounds</Text>
           </Pressable>
           <Pressable
             onPress={() => setTab("meditation")}
             style={[styles.tab, tab === "meditation" && styles.tabOn]}
           >
-            <Text style={[styles.tabText, tab === "meditation" && styles.tabTextOn]}>
-              Meditation
-            </Text>
+            <Text style={styles.tabText}>Meditation</Text>
           </Pressable>
           <Pressable
             onPress={() => setTab("library")}
             style={[styles.tab, tab === "library" && styles.tabOn]}
           >
-            <Text style={[styles.tabText, tab === "library" && styles.tabTextOn]}>
-              Spotify
-            </Text>
+            <Text style={styles.tabText}>Spotify</Text>
           </Pressable>
         </View>
+
+        {audio.currentTrack ? (
+          <View style={styles.nowPlaying}>
+            <Text style={styles.nowLabel}>Now Playing</Text>
+            <Text style={styles.nowTrack}>{audio.currentTrack}</Text>
+            <Text style={styles.nowSource}>{sourceLabel}</Text>
+            <View style={styles.controlsRow}>
+              <View style={[styles.controlsSide, styles.controlsSideLeft]}>
+                {audio.source === "spotify" ? (
+                  <Pressable
+                    style={styles.ctrlHit}
+                    onPress={() => void audio.spotifySkipPrevious()}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.ctrlText}>Previous</Text>
+                  </Pressable>
+                ) : (
+                  <View style={styles.ctrlHit} />
+                )}
+              </View>
+              <View style={styles.controlsCenterCluster}>
+                <Pressable
+                  style={styles.ctrlHit}
+                  onPress={() => void (audio.isPlaying ? audio.pause() : audio.resume())}
+                  hitSlop={8}
+                >
+                  <Text style={styles.ctrlText}>{audio.isPlaying ? "Pause" : "Play"}</Text>
+                </Pressable>
+                <Pressable style={styles.ctrlHit} onPress={() => void audio.stop()} hitSlop={8}>
+                  <Text style={styles.ctrlText}>Stop</Text>
+                </Pressable>
+              </View>
+              <View style={[styles.controlsSide, styles.controlsSideRight]}>
+                {audio.source === "spotify" ? (
+                  <Pressable
+                    style={styles.ctrlHit}
+                    onPress={() => void audio.spotifySkipNext()}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.ctrlText}>Next</Text>
+                  </Pressable>
+                ) : (
+                  <View style={styles.ctrlHit} />
+                )}
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         {tab === "library" ? (
           <SpotifyLibraryTab />
@@ -124,32 +173,17 @@ export default function SoundScreen() {
           </View>
         )}
 
-        {audio.currentTrack ? (
-          <View style={styles.nowPlaying}>
-            <Text style={styles.nowLabel}>Now Playing</Text>
-            <Text style={styles.nowTrack}>{audio.currentTrack}</Text>
-            <Text style={styles.nowSource}>{sourceLabel}</Text>
-            <View style={styles.controls}>
-              <Pressable onPress={() => void (audio.isPlaying ? audio.pause() : audio.resume())}>
-                <Text style={styles.ctrlText}>{audio.isPlaying ? "Pause" : "Play"}</Text>
-              </Pressable>
-              <Pressable onPress={() => void audio.stop()}>
-                <Text style={styles.ctrlText}>Stop</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-
-        <Text style={styles.bluetoothStatus}>Connected to SleepMask</Text>
-        {audio.source === "spotify" && audio.sleepTimerSelectMin > 0 ? (
-          <Text style={styles.timerHint}>Sleep timer does not control Spotify playback</Text>
-        ) : null}
+        <Text style={styles.bluetoothStatus}>Connected to Sleep Mask</Text>
       </ScrollView>
     </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  scrollView: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
   content: {
     paddingHorizontal: appTheme.space.screenPadding,
     paddingBottom: 80,
@@ -185,11 +219,12 @@ const styles = StyleSheet.create({
     borderColor: appTheme.colors.accentBorderSoft,
   },
   tabText: {
-    color: appTheme.colors.textSecondary,
+    color: appTheme.colors.text,
     fontFamily: appTheme.fonts.medium,
     fontSize: 16,
+    textAlign: "center",
+    width: "100%",
   },
-  tabTextOn: { color: appTheme.colors.accent },
   rows: { gap: 12 },
   row: {
     backgroundColor: appTheme.colors.surface,
@@ -219,22 +254,64 @@ const styles = StyleSheet.create({
     borderColor: appTheme.colors.borderInner,
   },
   nowPlaying: {
-    marginTop: 24,
+    marginBottom: 16,
     backgroundColor: appTheme.colors.surface,
     borderWidth: 1,
     borderColor: appTheme.colors.border,
     borderRadius: 14,
     padding: 16,
+    alignItems: "center",
   },
-  nowLabel: { color: appTheme.colors.textSecondary, fontSize: 12 },
+  nowLabel: {
+    color: appTheme.colors.textSecondary,
+    fontSize: 12,
+    textAlign: "center",
+    alignSelf: "stretch",
+  },
   nowTrack: {
     color: appTheme.colors.text,
     marginTop: 4,
     fontFamily: appTheme.fonts.medium,
     fontSize: 16,
+    textAlign: "center",
+    alignSelf: "stretch",
   },
-  nowSource: { marginTop: 3, color: appTheme.colors.textSecondary, fontSize: 12 },
-  controls: { marginTop: 10, flexDirection: "row", gap: 20 },
+  nowSource: {
+    marginTop: 3,
+    color: appTheme.colors.textSecondary,
+    fontSize: 12,
+    textAlign: "center",
+    alignSelf: "stretch",
+  },
+  controlsRow: {
+    marginTop: 14,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  controlsSide: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 44,
+  },
+  controlsSideLeft: { justifyContent: "flex-start" },
+  controlsSideRight: { justifyContent: "flex-end" },
+  controlsCenterCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 18,
+    flexShrink: 0,
+    minHeight: 44,
+  },
+  ctrlHit: {
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 2,
+  },
   ctrlText: { color: appTheme.colors.accent, fontFamily: appTheme.fonts.medium, fontSize: 14 },
   bluetoothStatus: {
     marginTop: 14,
@@ -242,5 +319,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
   },
-  timerHint: { marginTop: 10, color: appTheme.colors.textMuted, textAlign: "center", fontSize: 12 },
 });

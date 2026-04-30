@@ -39,10 +39,12 @@ export function AppScreen({
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: appTheme.colors.background,
+    /** Transparent so root `StarfieldBackground` stays visible behind scroll/content */
+    backgroundColor: "transparent",
   },
   scroll: {
     flex: 1,
+    backgroundColor: "transparent",
   },
   scrollContent: {
     paddingHorizontal: appTheme.space.screenPadding,
@@ -50,5 +52,6 @@ const styles = StyleSheet.create({
   },
   fill: {
     flex: 1,
+    backgroundColor: "transparent",
   },
 });

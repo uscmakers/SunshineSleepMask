@@ -77,12 +77,14 @@ const styles = StyleSheet.create({
   iconWellMuted: {
     backgroundColor: appTheme.colors.surfaceRow,
   },
-  titles: { flex: 1, minWidth: 0 },
+  titles: { flex: 1, minWidth: 0, alignItems: "center" },
   statusTitle: {
     fontFamily: appTheme.fonts.medium,
     fontSize: appTheme.type.h3,
     lineHeight: appTheme.type.h3Line,
     color: appTheme.colors.text,
+    textAlign: "center",
+    alignSelf: "stretch",
   },
   statusSub: {
     marginTop: 2,
@@ -90,6 +92,8 @@ const styles = StyleSheet.create({
     fontSize: appTheme.type.body,
     lineHeight: appTheme.type.bodyLine,
     color: appTheme.colors.textSecondary,
+    textAlign: "center",
+    alignSelf: "stretch",
   },
   batteryPill: {
     flexDirection: "row",

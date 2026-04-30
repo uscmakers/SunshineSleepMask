@@ -176,7 +176,7 @@ function AlarmCard({
             </>
           ) : (
             <>
-              <Text style={styles.subLabel}>Color Presets</Text>
+              <Text style={[styles.subLabel, styles.colorPresetsAfterTabs]}>Color Presets</Text>
               <View style={styles.presetRow}>
                 {colorPresets.map((hex) => (
                   <TouchableOpacity
@@ -193,7 +193,6 @@ function AlarmCard({
               >
                 <Panel3 />
               </ColorPicker>
-              <Text style={styles.subLabel}>Selected Color: {settings.customColor}</Text>
               <LabeledSlider
                 label="LED Brightness"
                 value={settings.customBrightness}
@@ -202,6 +201,24 @@ function AlarmCard({
                 step={0.01}
                 formatValue={(v) => `${Math.round(v * 100)}%`}
                 onValueChange={(v) => onChangeSettings(alarm.id, { customBrightness: v })}
+              />
+              <LabeledSlider
+                label="Sunrise Duration"
+                value={settings.sunriseDuration}
+                min={5}
+                max={45}
+                step={1}
+                formatValue={(v) => `${Math.round(v)} min`}
+                onValueChange={(v) => onChangeSettings(alarm.id, { sunriseDuration: v })}
+              />
+              <LabeledSlider
+                label="Snooze Duration"
+                value={settings.snoozeDuration}
+                min={1}
+                max={30}
+                step={1}
+                formatValue={(v) => `${Math.round(v)} min`}
+                onValueChange={(v) => onChangeSettings(alarm.id, { snoozeDuration: v })}
               />
               <View style={styles.previewRow}>
                 <View
@@ -547,6 +564,8 @@ const styles = StyleSheet.create({
   },
   testBtnText: { color: appTheme.colors.accent, fontFamily: appTheme.fonts.medium, fontSize: 14 },
   subLabel: { color: appTheme.colors.textSecondary, fontSize: 13, marginBottom: 8 },
+  /** Extra space below Sunrise Simulation / Create My Own tabs before Color Presets */
+  colorPresetsAfterTabs: { marginTop: 26 },
   presetRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
   preset: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: appTheme.colors.borderInner },
   colorPicker: { width: "100%", marginBottom: 12 },

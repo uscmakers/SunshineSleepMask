@@ -33,7 +33,7 @@ export type GlobalAudioActions = {
   resume: () => Promise<void>;
   stop: () => Promise<void>;
   setVolume: (v: number) => void;
-  /** 0 = off, 1–120. Resets armed timer if playing local. */
+  /** 0 = off, 1–120. Rearms countdown while ambient, meditation, or Spotify is playing. */
   setSleepTimerSelectMin: (m: number) => void;
   clearTimer: () => void;
   setSpotifyAccessToken: (token: string | null) => void;
@@ -44,6 +44,11 @@ export type GlobalAudioActions = {
   /** Refreshes if expired, then returns an access token or null if logged out. */
   getSpotifyAccessToken: () => Promise<string | null>;
   spotifyApiPause: () => Promise<void>;
+  /** Spotify playback only — no-op when not playing from Spotify. */
+  spotifySkipNext: () => Promise<void>;
+  spotifySkipPrevious: () => Promise<void>;
+  /** Pulls track title + play state from Spotify (e.g. after skip elsewhere or in the Spotify app). */
+  refreshSpotifyPlaybackDisplay: () => Promise<void>;
   setSpotifyTokenBundle: (
     bundle: { access: string; refresh: string; expiresAt: number } | null
   ) => void;

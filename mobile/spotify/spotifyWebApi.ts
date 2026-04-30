@@ -187,6 +187,45 @@ export async function spotifyResumeOnDevice(token: string, deviceId: string): Pr
   });
 }
 
+export async function spotifyPlayerNext(token: string, deviceId: string): Promise<Response> {
+  const q = `?device_id=${encodeURIComponent(deviceId)}`;
+  return fetch(`${API}/me/player/next${q}`, {
+    method: "POST",
+    headers: authHeader(token),
+  });
+}
+
+export async function spotifyPlayerPrevious(token: string, deviceId: string): Promise<Response> {
+  const q = `?device_id=${encodeURIComponent(deviceId)}`;
+  return fetch(`${API}/me/player/previous${q}`, {
+    method: "POST",
+    headers: authHeader(token),
+  });
+}
+
+/** Active track/episode from GET /me/player — needs `user-read-playback-state`. */
+export type PlaybackItemMeta = {
+  title: string;
+  uri: string | null;
+  isPlaying: boolean;
+};
+
+export async function getPlaybackItemMeta(token: string): Promise<PlaybackItemMeta | null> {
+  const r = await fetch(`${API}/me/player`, { headers: authHeader(token) });
+  if (r.status === 204) return null;
+  if (!r.ok) return null;
+  const j = (await r.json()) as {
+    item?: { name?: string; uri?: string } | null;
+    is_playing?: boolean;
+  };
+  const item = j.item;
+  if (!item?.name || typeof item.name !== "string") return null;
+  const title = item.name.trim();
+  if (!title) return null;
+  const uri = typeof item.uri === "string" ? item.uri : null;
+  return { title, uri, isPlaying: Boolean(j.is_playing) };
+}
+
 export type SpotifyTrackItem = {
   id: string;
   uri: string;
@@ -210,8 +249,9 @@ export type SpotifyPlaylistSimplified = {
   id: string;
   name: string;
   uri: string;
-  tracks: { total: number };
-  images: { url: string }[];
+  /** Present on `/me/playlists` items; omit optional chaining in UI anyway. */
+  tracks?: { total: number };
+  images?: { url: string }[];
 };
 
 export async function getUserPlaylists(

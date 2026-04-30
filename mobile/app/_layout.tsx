@@ -10,10 +10,23 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AlarmProvider } from '@/alarm/AlarmContext';
 import { GlobalAudioProvider } from '@/audio/GlobalAudioContext';
+import { StarfieldBackground } from '@/components/ui/StarfieldBackground';
+import { appTheme } from '@/theme/appTheme';
+
+/** Lets `StarfieldBackground` show through on iOS (native screens default to an opaque theme background). */
+const navigationDarkTransparent = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: 'transparent',
+    card: appTheme.colors.surface,
+  },
+};
 
 
 export {
@@ -63,16 +76,37 @@ export default function RootLayout() {
 function RootLayoutNav() {
   // App uses a dark, token-driven layout (`appTheme`); keep navigation in dark mode
   // so modals and nested routes match the Figma spec.
+  // Starfield sits under all routes; navigation layer stays interactive above it.
   return (
-    <GlobalAudioProvider>
-      <AlarmProvider>
-        <ThemeProvider value={DarkTheme}>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-          </Stack>
-        </ThemeProvider>
-      </AlarmProvider>
-    </GlobalAudioProvider>
+    <View style={styles.rootShell}>
+      <StarfieldBackground />
+      <View style={styles.navAboveStars} pointerEvents="box-none">
+        <GlobalAudioProvider>
+          <AlarmProvider>
+            <ThemeProvider value={navigationDarkTransparent}>
+              <Stack
+                screenOptions={{
+                  contentStyle: { backgroundColor: 'transparent' },
+                }}
+              >
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+              </Stack>
+            </ThemeProvider>
+          </AlarmProvider>
+        </GlobalAudioProvider>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  /** Matches starfield base so any gap still reads as black */
+  rootShell: { flex: 1, backgroundColor: appTheme.colors.background },
+  navAboveStars: {
+    flex: 1,
+    zIndex: 1,
+    elevation: 1,
+    backgroundColor: 'transparent',
+  },
+});

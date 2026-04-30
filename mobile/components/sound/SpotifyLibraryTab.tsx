@@ -21,6 +21,7 @@ import {
   type SpotifyShowItem,
   type SpotifyTrackItem,
 } from "@/spotify/spotifyWebApi";
+import { getSpotifyRedirectUri, usesExpoAuthProxy } from "@/spotify/spotifyConfig";
 
 export function SpotifyLibraryTab() {
   const g = useGlobalAudio();
@@ -37,7 +38,8 @@ export function SpotifyLibraryTab() {
   useFocusEffect(
     useCallback(() => {
       void refreshConnection();
-    }, [refreshConnection])
+      void g.refreshSpotifyPlaybackDisplay();
+    }, [refreshConnection, g.refreshSpotifyPlaybackDisplay])
   );
   const [loading, setLoading] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -108,30 +110,66 @@ export function SpotifyLibraryTab() {
     void load();
   }, [load, connected]);
 
-  if (!hasClientId) {
-    return (
-      <View style={styles.hintBox}>
-        <Text style={styles.hintText}>
-          Add <Text style={styles.code}>spotifyClientId</Text> under{" "}
-          <Text style={styles.code}>expo.extra</Text> in app.json, then in the Spotify
-          Developer dashboard add a Redirect URI that matches the app’s redirect (same
-          scheme as <Text style={styles.code}>expo scheme</Text>, path{" "}
-          <Text style={styles.code}>spotify-callback</Text>).
-        </Text>
-      </View>
-    );
-  }
-
   if (!connected) {
+    const redirectForDocs = getSpotifyRedirectUri();
+    const proxy = usesExpoAuthProxy();
     return (
       <View>
+        {!hasClientId ? (
+          <Text style={styles.connectHint}>
+            Set <Text style={styles.connectHintStrong}>spotifyClientId</Text> under{" "}
+            <Text style={styles.connectHintStrong}>expo.extra</Text> in app.json and restart Expo (
+            <Text style={styles.connectHintStrong}>npx expo start -c</Text> if it still doesn’t load).
+            In the Spotify Developer Dashboard, Redirect URIs: copy the exact URI from Metro logs (
+            <Text style={styles.connectHintStrong}>Spotify redirect URI...</Text>). It must match
+            exactly.
+            {proxy ? (
+              <>
+                {" "}
+                In Expo Go the redirect looks like{" "}
+                <Text style={styles.connectHintStrong}>https://auth.expo.io/@owner/slug</Text>.
+              </>
+            ) : (
+              <>
+                {" "}
+                With a dev build or standalone app it looks like{" "}
+                <Text style={styles.connectHintStrong}>your-scheme://spotify-oauth</Text>.
+              </>
+            )}
+            {"\n\n"}
+            You can also set <Text style={styles.connectHintStrong}>EXPO_PUBLIC_SPOTIFY_CLIENT_ID</Text>{" "}
+            and restart the bundler.
+          </Text>
+        ) : (
+          <Text style={styles.connectHint}>
+            Spotify Redirect URI (must match exactly):{" "}
+            <Text style={styles.connectHintStrong}>{redirectForDocs}</Text>
+            {"\n\n"}
+            {proxy ? (
+              <>
+                Expo Go uses auth.expo.io to hand control back to the app; that step often fails with
+                “Something went wrong.” Try{" "}
+                <Text style={styles.connectHintStrong}>npx expo login</Text>, then{" "}
+                <Text style={styles.connectHintStrong}>npx expo start --tunnel</Text>, and retry.
+                For a stable OAuth flow, run a development build (
+                <Text style={styles.connectHintStrong}>expo-dev-client</Text>) so the redirect uses your
+                app scheme (see Metro logs) instead of auth.expo.io.
+              </>
+            ) : (
+              <>
+                Add the URI above to your Spotify app’s Redirect URIs. Rebuild the native app if you
+                change <Text style={styles.connectHintStrong}>scheme</Text> or this path.
+              </>
+            )}
+          </Text>
+        )}
         {error && !busy ? <Text style={styles.err}>{error}</Text> : null}
         <Pressable
-          style={[styles.btn, busy && styles.btnDisabled]}
+          style={[styles.btn, (busy || !hasClientId) && styles.btnDisabled]}
           onPress={() => {
             void promptConnect();
           }}
-          disabled={busy}
+          disabled={busy || !hasClientId}
         >
           {busy ? (
             <ActivityIndicator color={appTheme.colors.background} />
@@ -174,6 +212,50 @@ export function SpotifyLibraryTab() {
       ) : null}
       {loadErr ? <Text style={styles.err}>{loadErr}</Text> : null}
       {loading ? <ActivityIndicator color={appTheme.colors.accent} /> : null}
+      <Text style={styles.sec}>Your playlists</Text>
+      {playlists.map((pl) => (
+        <Pressable
+          key={pl.id}
+          style={styles.row}
+          onPress={() => void playContext({ context_uri: pl.uri }, pl.name)}
+        >
+          {pl.images?.[0]?.url ? (
+            <Image source={{ uri: pl.images[0].url }} style={styles.thumb} />
+          ) : (
+            <View style={styles.thumb} />
+          )}
+          <View style={styles.info}>
+            <Text style={styles.t}>{pl.name}</Text>
+            <Text style={styles.sub}>
+              {pl.tracks?.total != null ? `${pl.tracks.total} tracks` : "Playlist"}
+            </Text>
+          </View>
+          <Text style={styles.pill}>▶</Text>
+        </Pressable>
+      ))}
+
+      <Text style={styles.sec}>Podcasts (your shows)</Text>
+      {shows.map((sh) => (
+        <Pressable
+          key={sh.id}
+          style={styles.row}
+          onPress={() => void playContext({ context_uri: sh.uri }, sh.name)}
+        >
+          {sh.images?.[0]?.url ? (
+            <Image source={{ uri: sh.images[0].url }} style={styles.thumb} />
+          ) : (
+            <View style={styles.thumb} />
+          )}
+          <View style={styles.info}>
+            <Text style={styles.t}>{sh.name}</Text>
+            <Text style={styles.sub} numberOfLines={1}>
+              {sh.publisher}
+            </Text>
+          </View>
+          <Text style={styles.pill}>▶</Text>
+        </Pressable>
+      ))}
+
       <Text style={styles.sec}>Saved tracks</Text>
       {tracks.map((row) => {
         const t = row.track;
@@ -202,65 +284,26 @@ export function SpotifyLibraryTab() {
         );
       })}
 
-      <Text style={styles.sec}>Your playlists</Text>
-      {playlists.map((pl) => (
-        <Pressable
-          key={pl.id}
-          style={styles.row}
-          onPress={() => void playContext({ context_uri: pl.uri }, pl.name)}
-        >
-          {pl.images?.[0]?.url ? (
-            <Image source={{ uri: pl.images[0].url }} style={styles.thumb} />
-          ) : (
-            <View style={styles.thumb} />
-          )}
-          <View style={styles.info}>
-            <Text style={styles.t}>{pl.name}</Text>
-            <Text style={styles.sub}>{pl.tracks.total} tracks</Text>
-          </View>
-          <Text style={styles.pill}>▶</Text>
-        </Pressable>
-      ))}
-
-      <Text style={styles.sec}>Podcasts (your shows)</Text>
-      {shows.map((sh) => (
-        <Pressable
-          key={sh.id}
-          style={styles.row}
-          onPress={() => void playContext({ context_uri: sh.uri }, sh.name)}
-        >
-          {sh.images?.[0]?.url ? (
-            <Image source={{ uri: sh.images[0].url }} style={styles.thumb} />
-          ) : (
-            <View style={styles.thumb} />
-          )}
-          <View style={styles.info}>
-            <Text style={styles.t}>{sh.name}</Text>
-            <Text style={styles.sub} numberOfLines={1}>
-              {sh.publisher}
-            </Text>
-          </View>
-          <Text style={styles.pill}>▶</Text>
-        </Pressable>
-      ))}
-
       <Text style={styles.footNote}>
-        Sleep timer does not stop Spotify — use the Spotify app to end playback.
+        When a sleep timer is set on the Sounds screen, playback stops when time runs out.
       </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hintBox: {
-    padding: appTheme.space.lg,
-    backgroundColor: appTheme.colors.warningBg,
-    borderRadius: appTheme.radii.md,
-    borderWidth: 1,
-    borderColor: appTheme.colors.warningBorder,
+  /** Same typography as `note` (premium disclaimer); spacing only differs above the button. */
+  connectHint: {
+    marginTop: 0,
+    marginBottom: appTheme.space.md,
+    color: appTheme.colors.textSecondary,
+    fontSize: appTheme.type.caption,
   },
-  hintText: { color: appTheme.colors.textInsightBody, fontSize: appTheme.type.body },
-  code: { fontFamily: appTheme.fonts.medium, color: appTheme.colors.text },
+  connectHintStrong: {
+    fontFamily: appTheme.fonts.medium,
+    color: appTheme.colors.textSecondary,
+    fontSize: appTheme.type.caption,
+  },
   btn: {
     backgroundColor: appTheme.colors.accent,
     paddingVertical: 14,

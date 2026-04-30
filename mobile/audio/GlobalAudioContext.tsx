@@ -10,20 +10,51 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { AppState } from "react-native";
 
-import type { GlobalAudioState, GlobalAudioValue, LocalPlayParams } from "@/audio/types";
+import type {
+  GlobalAudioState,
+  GlobalAudioValue,
+  LocalPlayParams,
+} from "@/audio/types";
 import { getSpotifyClientId } from "@/spotify/spotifyConfig";
 import {
+  getPlaybackItemMeta,
+  type PlaybackItemMeta,
   refreshSpotifyAccessToken,
   resolveSpotifyPlaybackDevice,
   spotifyFriendlyPlayError,
   spotifyPauseWeb,
+  spotifyPlayerNext,
+  spotifyPlayerPrevious,
   spotifyPlayUris,
   spotifyPlayWithBody,
   spotifyResumeOnDevice,
 } from "@/spotify/spotifyWebApi";
 
 WebBrowser.maybeCompleteAuthSession();
+
+/** After starting playlist/podcast context, Spotify reports the real track shortly after. */
+async function pollPlaybackItemMeta(token: string): Promise<PlaybackItemMeta | null> {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 320));
+    }
+    const meta = await getPlaybackItemMeta(token);
+    if (meta) return meta;
+  }
+  return null;
+}
+
+function mergeSpotifyMetaIntoState(s: GlobalAudioState, meta: PlaybackItemMeta): GlobalAudioState {
+  return {
+    ...s,
+    currentTrack: meta.title,
+    currentTrackId: meta.uri ?? "spotify:player",
+    isPlaying: meta.isPlaying,
+    isPaused: !meta.isPlaying,
+  };
+}
 
 const initial: GlobalAudioState = {
   currentTrack: null,
@@ -124,40 +155,6 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
     }));
   }, []);
 
-  const rearmLocalTimer = useCallback(
-    (minutes: number) => {
-      clearEnd();
-      if (minutes <= 0) {
-        setSt((s) => ({ ...s, timerEndAt: null, sleepTimerSecondsRemaining: 0 }));
-        clearTick();
-        return;
-      }
-      const at = Date.now() + minutes * 60_000;
-      setSt((s) => ({ ...s, timerEndAt: at }));
-      startTick();
-      endTimerId.current = setTimeout(() => {
-        const cur = stRef.current;
-        if (cur.source !== "ambient" && cur.source !== "meditation") {
-          return;
-        }
-        void (async () => {
-          try {
-            await unloadLocal();
-          } catch {
-            /* */
-          }
-          setSt((prev) => ({
-            ...initial,
-            volume: prev.volume,
-            lastError: null,
-          }));
-          clearTick();
-        })();
-      }, minutes * 60_000);
-    },
-    [clearEnd, clearTick, startTick, unloadLocal]
-  );
-
   const refreshSpotifyIfNeeded = useCallback(async () => {
     const b = spotifyRef.current;
     if (!b) return;
@@ -184,6 +181,72 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       setSpotifyGen((g) => g + 1);
     }
   }, []);
+
+  const scheduleSleepTimer = useCallback(
+    (minutes: number) => {
+      clearEnd();
+      if (minutes <= 0) {
+        setSt((s) => ({ ...s, timerEndAt: null, sleepTimerSecondsRemaining: 0 }));
+        clearTick();
+        return;
+      }
+      const at = Date.now() + minutes * 60_000;
+      setSt((s) => ({ ...s, timerEndAt: at }));
+      startTick();
+      endTimerId.current = setTimeout(() => {
+        void (async () => {
+          const cur = stRef.current;
+          if (cur.source === "spotify" && spotifyRef.current) {
+            try {
+              await refreshSpotifyIfNeeded();
+              if (spotifyRef.current) {
+                await spotifyPauseWeb(spotifyRef.current.access);
+              }
+            } catch (e) {
+              setErr(e instanceof Error ? e.message : "Sleep timer stop failed");
+            }
+            setSt((s) => ({
+              ...s,
+              isPlaying: false,
+              isPaused: false,
+              currentTrack: null,
+              currentTrackId: null,
+              source: "idle",
+              timerEndAt: null,
+              sleepTimerSecondsRemaining: 0,
+              sleepTimerSelectMin: 0,
+            }));
+            clearTick();
+            return;
+          }
+          if (cur.source !== "ambient" && cur.source !== "meditation") {
+            setSt((s) => ({ ...s, timerEndAt: null, sleepTimerSecondsRemaining: 0 }));
+            clearTick();
+            return;
+          }
+          try {
+            await unloadLocal();
+          } catch {
+            /* */
+          }
+          setSt((prev) => ({
+            ...initial,
+            volume: prev.volume,
+            lastError: null,
+          }));
+          clearTick();
+        })();
+      }, minutes * 60_000);
+    },
+    [clearEnd, clearTick, startTick, unloadLocal, refreshSpotifyIfNeeded, setErr]
+  );
+
+  const rearmLocalTimer = useCallback(
+    (minutes: number) => {
+      scheduleSleepTimer(minutes);
+    },
+    [scheduleSleepTimer]
+  );
 
   const stop = useCallback(async () => {
     setErr(null);
@@ -262,8 +325,11 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       if ((s.source === "ambient" || s.source === "meditation") && s.isPlaying) {
         rearmLocalTimer(min);
       }
+      if (s.source === "spotify" && s.isPlaying) {
+        scheduleSleepTimer(min);
+      }
     },
-    [rearmLocalTimer, clearEnd, clearTick]
+    [rearmLocalTimer, clearEnd, clearTick, scheduleSleepTimer]
   );
 
   const clearTimer = useCallback(() => {
@@ -387,6 +453,10 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         const res = await spotifyResumeOnDevice(token, resolved.deviceId);
         if (res.status === 204 || res.ok) {
           setSt((s) => ({ ...s, isPlaying: true, isPaused: false }));
+          const sel = sleepMinRef.current;
+          if (sel > 0) {
+            scheduleSleepTimer(sel);
+          }
         } else {
           const txt = await res.text();
           setErr(spotifyFriendlyPlayError(res.status, txt));
@@ -405,7 +475,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         setErr(e instanceof Error ? e.message : "Resume failed");
       }
     }
-  }, [rearmLocalTimer, refreshSpotifyIfNeeded, setErr]);
+  }, [rearmLocalTimer, refreshSpotifyIfNeeded, scheduleSleepTimer, setErr]);
 
   const setSpotifyTokenBundle = useCallback(
     (b: { access: string; refresh: string; expiresAt: number } | null) => {
@@ -475,9 +545,18 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         return msg;
       }
       setSt((s) => ({ ...s, isPlaying: true, isPaused: false }));
+      const selAfter = sleepMinRef.current;
+      if (selAfter > 0) {
+        scheduleSleepTimer(selAfter);
+      }
+      void (async () => {
+        const meta = await pollPlaybackItemMeta(token);
+        if (!meta) return;
+        setSt((s) => (s.source === "spotify" ? mergeSpotifyMetaIntoState(s, meta) : s));
+      })();
       return null;
     },
-    [clearEnd, clearTick, refreshSpotifyIfNeeded, setErr, unloadLocal]
+    [clearEnd, clearTick, refreshSpotifyIfNeeded, scheduleSleepTimer, setErr, unloadLocal]
   );
 
   const playSpotifyWithBody = useCallback(
@@ -526,10 +605,100 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
         return msg;
       }
       setSt((s) => ({ ...s, isPlaying: true, isPaused: false }));
+      const selAfter = sleepMinRef.current;
+      if (selAfter > 0) {
+        scheduleSleepTimer(selAfter);
+      }
+      void (async () => {
+        const meta = await pollPlaybackItemMeta(token);
+        if (!meta) return;
+        setSt((s) => (s.source === "spotify" ? mergeSpotifyMetaIntoState(s, meta) : s));
+      })();
       return null;
     },
-    [clearEnd, clearTick, refreshSpotifyIfNeeded, setErr, unloadLocal]
+    [clearEnd, clearTick, refreshSpotifyIfNeeded, scheduleSleepTimer, setErr, unloadLocal]
   );
+
+  const refreshSpotifyPlaybackDisplay = useCallback(async () => {
+    if (stRef.current.source !== "spotify" || !spotifyRef.current) return;
+    try {
+      await refreshSpotifyIfNeeded();
+      if (!spotifyRef.current || stRef.current.source !== "spotify") return;
+      const meta = await getPlaybackItemMeta(spotifyRef.current.access);
+      if (!meta) return;
+      setSt((s) => (s.source === "spotify" ? mergeSpotifyMetaIntoState(s, meta) : s));
+    } catch {
+      /* */
+    }
+  }, [refreshSpotifyIfNeeded]);
+
+  useEffect(() => {
+    if (st.source !== "spotify") return;
+    void refreshSpotifyPlaybackDisplay();
+    const id = setInterval(() => void refreshSpotifyPlaybackDisplay(), 4000);
+    return () => clearInterval(id);
+  }, [st.source, spotifyGen, refreshSpotifyPlaybackDisplay]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") void refreshSpotifyPlaybackDisplay();
+    });
+    return () => sub.remove();
+  }, [refreshSpotifyPlaybackDisplay]);
+
+  const spotifySkipNext = useCallback(async () => {
+    if (stRef.current.source !== "spotify" || !spotifyRef.current) return;
+    try {
+      await refreshSpotifyIfNeeded();
+      if (!spotifyRef.current) return;
+      const token = spotifyRef.current.access;
+      const resolved = await resolveSpotifyPlaybackDevice(token);
+      if (!resolved.ok) {
+        setErr(resolved.message);
+        return;
+      }
+      const res = await spotifyPlayerNext(token, resolved.deviceId);
+      if (!res.ok && res.status !== 204) {
+        const txt = await res.text();
+        setErr(spotifyFriendlyPlayError(res.status, txt));
+        return;
+      }
+      void (async () => {
+        const meta = await pollPlaybackItemMeta(token);
+        if (!meta) return;
+        setSt((s) => (s.source === "spotify" ? mergeSpotifyMetaIntoState(s, meta) : s));
+      })();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Skip failed");
+    }
+  }, [refreshSpotifyIfNeeded, setErr]);
+
+  const spotifySkipPrevious = useCallback(async () => {
+    if (stRef.current.source !== "spotify" || !spotifyRef.current) return;
+    try {
+      await refreshSpotifyIfNeeded();
+      if (!spotifyRef.current) return;
+      const token = spotifyRef.current.access;
+      const resolved = await resolveSpotifyPlaybackDevice(token);
+      if (!resolved.ok) {
+        setErr(resolved.message);
+        return;
+      }
+      const res = await spotifyPlayerPrevious(token, resolved.deviceId);
+      if (!res.ok && res.status !== 204) {
+        const txt = await res.text();
+        setErr(spotifyFriendlyPlayError(res.status, txt));
+        return;
+      }
+      void (async () => {
+        const meta = await pollPlaybackItemMeta(token);
+        if (!meta) return;
+        setSt((s) => (s.source === "spotify" ? mergeSpotifyMetaIntoState(s, meta) : s));
+      })();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Skip failed");
+    }
+  }, [refreshSpotifyIfNeeded, setErr]);
 
   const spotifyApiPause = useCallback(async () => {
     if (!spotifyRef.current) return;
@@ -559,6 +728,9 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       playSpotifyWithBody,
       getSpotifyAccessToken,
       spotifyApiPause,
+      spotifySkipNext,
+      spotifySkipPrevious,
+      refreshSpotifyPlaybackDisplay,
       setSpotifyTokenBundle,
     }),
     [
@@ -577,6 +749,9 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       playSpotifyWithBody,
       getSpotifyAccessToken,
       spotifyApiPause,
+      spotifySkipNext,
+      spotifySkipPrevious,
+      refreshSpotifyPlaybackDisplay,
       setSpotifyTokenBundle,
     ]
   );

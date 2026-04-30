@@ -1,5 +1,6 @@
 {
   "expo": {
+    "owner": "claykoessler",
     "name": "SunshineSleepMask",
     "slug": "SunshineSleepMask",
     "version": "1.0.0",
@@ -14,9 +15,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.claykoessler.sunshinesleepmask"
     },
     "android": {
+      "package": "com.claykoessler.sunshinesleepmask",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -33,7 +36,16 @@
       "spotifyClientId": "3b9de7d64cc548debac19b8a464dfa36"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-dev-client",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Sunshine Sleep Mask reads sleep and overnight heart rate from Apple Health so you can see Apple Watch sleep summaries in the app.",
+          "NSHealthUpdateUsageDescription": "Sunshine Sleep Mask does not write to Apple Health. HealthKit requires this string when enabling access.",
+          "background": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

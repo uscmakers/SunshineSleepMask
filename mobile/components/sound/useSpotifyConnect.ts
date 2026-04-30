@@ -1,8 +1,13 @@
-import { AccessTokenRequest, makeRedirectUri, useAuthRequest } from "expo-auth-session";
+import { AccessTokenRequest, useAuthRequest } from "expo-auth-session";
+import Constants from "expo-constants";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useGlobalAudio } from "@/audio/GlobalAudioContext";
-import { getSpotifyClientId } from "@/spotify/spotifyConfig";
+import {
+  getSpotifyClientId,
+  getSpotifyRedirectUri,
+  usesExpoAuthProxy,
+} from "@/spotify/spotifyConfig";
 
 const SCOPES = [
   "user-read-email",
@@ -17,7 +22,6 @@ const discovery = {
   tokenEndpoint: "https://accounts.spotify.com/api/token",
 } as const;
 
-/** Maps Authorization Code exchange failures to stable UI copy. */
 function mapTokenExchangeError(e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e);
   const lower = raw.toLowerCase();
@@ -37,18 +41,12 @@ export function useSpotifyConnect() {
   const [connected, setConnected] = useState(false);
   const lastCode = useRef<string | null>(null);
   const clientId = getSpotifyClientId();
-
-  /**
-   * This MUST exactly match the Spotify dashboard redirect URI (scheme + path), registered in the
-   * Spotify Developer Dashboard for this app.
-   */
-  const redirectUri = makeRedirectUri({
-    scheme: "sunshinesleepmask",
-    path: "spotify-callback",
-  });
+  const redirectUri = getSpotifyRedirectUri();
 
   useEffect(() => {
-    console.log("Spotify redirect URI:", redirectUri);
+    console.log("Spotify redirect URI (must match Spotify Dashboard exactly):", redirectUri);
+    console.log("Spotify OAuth uses Expo auth proxy (Expo Go):", usesExpoAuthProxy());
+    console.log("Expo originalFullName:", Constants.expoConfig?.originalFullName ?? "(none)");
   }, [redirectUri]);
 
   const [req, res, rawPromptAsync] = useAuthRequest(
@@ -59,30 +57,6 @@ export function useSpotifyConnect() {
       redirectUri,
     },
     discovery
-  );
-
-  const promptConnect = useCallback(
-    async (...args: Parameters<typeof rawPromptAsync>) => {
-      if (!clientId) {
-        setErr("Spotify Client ID missing. Set expo.extra.spotifyClientId");
-        return undefined;
-      }
-      setErr(null);
-      console.log("[Spotify OAuth] login starting");
-      try {
-        const result = await rawPromptAsync(...args);
-        if (result.type === "error") {
-          setErr("Spotify login failed");
-        } else if (result.type !== "success") {
-          setErr(null);
-        }
-        return result;
-      } catch {
-        setErr("Spotify login failed");
-        return undefined;
-      }
-    },
-    [clientId, rawPromptAsync]
   );
 
   const checkConnection = useCallback(async () => {
@@ -98,24 +72,48 @@ export function useSpotifyConnect() {
     void checkConnection();
   }, [checkConnection]);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      void checkConnection();
-    }, 5 * 60_000);
-    return () => clearInterval(id);
-  }, [checkConnection]);
-
-  useEffect(() => {
-    console.log("Spotify connected:", connected);
-  }, [connected]);
+  const promptConnect = useCallback(
+    async (...args: Parameters<typeof rawPromptAsync>) => {
+      if (!clientId) {
+        setErr("Spotify Client ID missing. Set expo.extra.spotifyClientId");
+        return undefined;
+      }
+      setErr(null);
+      console.log("[Spotify OAuth] login starting");
+      try {
+        const result = await rawPromptAsync({
+          preferEphemeralSession: false,
+          ...args[0],
+        });
+        if ("url" in result && result.url) {
+          console.log("[Spotify OAuth] prompt result:", result.type, result.url.slice(0, 180));
+        } else {
+          console.log("[Spotify OAuth] prompt result:", result.type);
+        }
+        if (result.type === "error") {
+          setErr("Spotify login failed");
+        } else if (result.type !== "success") {
+          setErr(null);
+        }
+        return result;
+      } catch {
+        setErr("Spotify login failed");
+        return undefined;
+      }
+    },
+    [clientId, rawPromptAsync]
+  );
 
   const disconnectSpotify = useCallback(() => {
     setSpotifyTokenBundle(null);
     lastCode.current = null;
     setErr(null);
     setConnected(false);
-    void checkConnection();
-  }, [checkConnection, setSpotifyTokenBundle]);
+  }, [setSpotifyTokenBundle]);
+
+  useEffect(() => {
+    console.log("Spotify connected:", connected);
+  }, [connected]);
 
   useEffect(() => {
     if (!res || res.type !== "success" || !req) return;
@@ -147,7 +145,6 @@ export function useSpotifyConnect() {
         });
         setErr(null);
         setConnected(true);
-        void checkConnection();
       } catch (e) {
         const msg = mapTokenExchangeError(e);
         setErr(msg);
@@ -157,7 +154,7 @@ export function useSpotifyConnect() {
         setBusy(false);
       }
     })();
-  }, [checkConnection, res, req, clientId, redirectUri, setSpotifyTokenBundle]);
+  }, [clientId, redirectUri, req, res, setSpotifyTokenBundle]);
 
   return {
     promptConnect,
@@ -166,7 +163,6 @@ export function useSpotifyConnect() {
     connected,
     hasClientId: Boolean(clientId),
     disconnectSpotify,
-    /** Re-read token from context (e.g. when screen gains focus). */
     refreshConnection: checkConnection,
   };
 }
