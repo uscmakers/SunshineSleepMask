@@ -77,7 +77,7 @@ void publishStatus(void);
 void publishHeartbeat(void);
 bool copyPayloadToBuffer(byte* payload, unsigned int length, char* out, size_t outSize);
 void lerpColor(float t, uint8_t& r, uint8_t& g, uint8_t& b);
-void startSunrise(int minutes, float brightness);
+void startSunrise(float minutes, float brightness);
 void updateSunrise(void);
 void stopSunrise(void);
 
@@ -314,13 +314,13 @@ void lerpColor(float t, uint8_t& r, uint8_t& g, uint8_t& b) {
   b = (uint8_t)((float)colors[idx][2] + (float)(colors[idx + 1][2] - colors[idx][2]) * localT + 0.5f);
 }
 
-void startSunrise(int minutes, float brightness) {
+void startSunrise(float minutes, float brightness) {
   sunrise.active = true;
   sunrise.startTime = millis();
-  sunrise.durationMs = (unsigned long)minutes * 60000UL;
+  sunrise.durationMs = (unsigned long)(minutes * 60000.0f + 0.5f);
   sunrise.maxBrightness = brightness;
 
-  Serial.printf("[SUNRISE] Started: %d min, brightness %.2f\n", minutes, brightness);
+  Serial.printf("[SUNRISE] Started: %.2f min, brightness %.2f\n", minutes, brightness);
 }
 
 void updateSunrise() {
@@ -418,10 +418,10 @@ void handleMessage(const char* topic, const char* jsonBuf, size_t jsonLen) {
       return;
     }
 
-    int duration = doc["sunriseDuration"] | 10;
+    float duration = doc["sunriseDuration"].isNull() ? 10.0f : doc["sunriseDuration"].as<float>();
     float brightness = (float)(doc["brightness"] | 1.0);
 
-    duration = constrain(duration, 5, 45);
+    duration = constrain(duration, 0.5f, 45.0f);
     if (brightness < 0.0f) brightness = 0.0f;
     if (brightness > 1.0f) brightness = 1.0f;
 

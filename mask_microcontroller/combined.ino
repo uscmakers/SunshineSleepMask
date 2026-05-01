@@ -206,6 +206,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int len) {
     else if (String(modeStr) == "rainbow") { currentMode = MODE_RAINBOW; }
     else                                    { currentMode = MODE_SOLID; }
 
+    // Alarm/sunrise sets matrix brightness down to 1; MQTT color payloads only update RGB — restore gain
+    // or solid colors look black after a short / interrupted firmware sunrise.
+    matrix.setBrightness(baseBrightness);
+
     Serial.print(F("Color mode: ")); Serial.println(modeStr);
   }
 
@@ -230,17 +234,21 @@ void mqttCallback(char* topic, byte* payload, unsigned int len) {
     fadeFrac    = 0.0f;
     lastSeqStep = millis();
     currentMode = MODE_SEQUENCE;
+    matrix.setBrightness(baseBrightness);
     Serial.print(F("Sequence loaded: ")); Serial.print(seqLen); Serial.println(F(" colors"));
   }
 
   // ── /alarm/set ─────────────────────────────────────────────────────────
-  // Payload: { "sunriseDuration": 15, "brightness": 0.8 }
+  // Payload: { "sunriseDuration": 15 } minutes — float OK (e.g. 0.5 = 30 sec)
   // Optional: { ..., "startNow": true }   (default = start immediately)
   else if (String(topic) == SUB_ALARM) {
-    int   dur    = doc["sunriseDuration"] | 15;
-    float bright = doc["brightness"]      | 0.8f;
+    float durMin   = doc["sunriseDuration"].isNull() ? 15.0f : doc["sunriseDuration"].as<float>();
+    float bright = doc["brightness"] | 0.8f;
 
-    alarmDurationMs = (uint32_t)max(1, min(45, dur)) * 60UL * 1000UL;
+    if (durMin < 0.5f) durMin = 0.5f;
+    if (durMin > 45.0f) durMin = 45.0f;
+
+    alarmDurationMs = (uint32_t)(durMin * 60.0f * 1000.0f);
     alarmMaxBright  = max(0.0f, min(1.0f, bright));
     alarmActive     = true;
     alarmStartMs    = millis();
@@ -248,7 +256,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int len) {
 
     // Start nearly black
     matrix.setBrightness(1);
-    Serial.printf("Sunrise: %d min, max brightness %.2f\n", dur, bright);
+    Serial.printf("Sunrise: %.2f min, max brightness %.2f\n", durMin, bright);
   }
 }
 
