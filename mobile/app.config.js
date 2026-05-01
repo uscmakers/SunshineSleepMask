@@ -52,11 +52,16 @@ module.exports = {
       typedRoutes: true,
     },
     extra: {
-      flespiToken: "jhIgc6MC1zVOGzhroq483pUhzXZSRhW9NfQR20OCOMf2Rgb2nmKRpzYPTszjDWCd",
+      eas: {
+        projectId: "c2d61aea-e297-4e81-a58b-c1e31f7658f3",
+      },
+      flespiToken:
+        "jhIgc6MC1zVOGzhroq483pUhzXZSRhW9NfQR20OCOMf2Rgb2nmKRpzYPTszjDWCd",
       /** Matches ESP32 MQTT client id string (`mqtt.connect(DEVICE_ID, ...)`) — not used in topic paths. */
       deviceId: "esp32-client",
       spotifyClientId:
-        process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID ?? "3b9de7d64cc548debac19b8a464dfa36",
+        process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID ??
+        "3b9de7d64cc548debac19b8a464dfa36",
     },
   },
 };
