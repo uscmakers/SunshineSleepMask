@@ -59,6 +59,15 @@ module.exports = {
         "jhIgc6MC1zVOGzhroq483pUhzXZSRhW9NfQR20OCOMf2Rgb2nmKRpzYPTszjDWCd",
       /** Matches ESP32 MQTT client id string (`mqtt.connect(DEVICE_ID, ...)`) — not used in topic paths. */
       deviceId: "esp32-client",
+      /** DotStar matrix where red/green channels are wired opposite to #RRGGBB — swap R/G in MQTT payloads only. Set false for standard wiring. */
+      ledSwapRedGreen: true,
+      /**
+       * When true, "Test Simulation" on the alarm screen runs sunrise by sending many `color` messages from the phone (sub-minute OK). No ESP reflash.
+       * Set false to use on-mask sunrise via MQTT `alarm/set` (needs firmware that accepts fractional `sunriseDuration` for times under 1 min).
+       */
+      phoneSunriseDemo: true,
+      /** Classic Bluetooth (A2DP) advertised name — matches `a2dp_sink.start(...)` in `combined.ino`. */
+      bluetoothDeviceName: "Sunshine",
       spotifyClientId:
         process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID ??
         "3b9de7d64cc548debac19b8a464dfa36",

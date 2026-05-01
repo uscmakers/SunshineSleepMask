@@ -1,10 +1,11 @@
 import Constants from "expo-constants";
 import { Link, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { formatTime, useAlarmContext } from "@/alarm/AlarmContext";
 import { useGlobalAudio } from "@/audio/GlobalAudioContext";
+import { ConnectMaskModal } from "@/components/ConnectMaskModal";
 import { DeviceConnectionCard } from "@/components/home/DeviceConnectionCard";
 import { MaskShowcaseCard } from "@/components/home/MaskShowcaseCard";
 import { AppScreen } from "@/components/ui/AppScreen";
@@ -27,6 +28,7 @@ export default function HomeScreen() {
   const deviceId =
     (Constants.expoConfig?.extra?.deviceId as string | undefined) ?? "esp32-client";
   const [mqttConnected, setMqttConnected] = useState(false);
+  const [connectMaskOpen, setConnectMaskOpen] = useState(false);
 
   useEffect(() => {
     if (!tokenOk) return;
@@ -34,7 +36,11 @@ export default function HomeScreen() {
     return subscribeMqttConnection(({ connected }) => setMqttConnected(connected));
   }, [tokenOk]);
 
-  const statusTitle = !tokenOk ? "Setup required" : mqttConnected ? "Connected" : "Not connected";
+  const statusTitle = !tokenOk
+    ? "Setup required"
+    : mqttConnected
+      ? "MQTT Connected"
+      : "MQTT not connected";
   /** Prefer plain copy; show a short hardware label instead of raw MQTT client ids. */
   const connectedSleepMaskSubtitle = useMemo(() => {
     if (!mqttConnected) return "";
@@ -73,15 +79,24 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Text style={styles.heroTitle}>Sunshine Sleep Mask</Text>
         <Text style={styles.subtitle}>Your personal sleep companion</Text>
+        {Platform.OS !== "web" ? (
+          <Pressable
+            style={styles.connectMaskBtn}
+            onPress={() => setConnectMaskOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Connect audio to mask via Bluetooth"
+          >
+            <Text style={styles.connectMaskBtnText}>Connect Audio to Mask</Text>
+          </Pressable>
+        ) : null}
       </View>
 
+      {Platform.OS !== "web" ? (
+        <ConnectMaskModal visible={connectMaskOpen} onClose={() => setConnectMaskOpen(false)} />
+      ) : null}
+
       <View style={styles.stack}>
-        <DeviceConnectionCard
-          statusTitle={statusTitle}
-          statusSubtitle={statusSubtitle}
-          batteryPercent="85%"
-          connected={tokenOk && mqttConnected}
-        />
+        <DeviceConnectionCard statusTitle={statusTitle} statusSubtitle={statusSubtitle} />
         <MaskShowcaseCard />
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Next Alarm</Text>
@@ -154,6 +169,22 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   top: { paddingTop: appTheme.space.lg },
+  connectMaskBtn: {
+    alignSelf: "stretch",
+    marginTop: appTheme.space.md,
+    paddingVertical: appTheme.space.md,
+    paddingHorizontal: appTheme.space.lg,
+    borderRadius: appTheme.radii.md,
+    borderWidth: 1,
+    borderColor: appTheme.colors.accentBorderSoft,
+    backgroundColor: appTheme.colors.accentSurface,
+  },
+  connectMaskBtnText: {
+    fontFamily: appTheme.fonts.medium,
+    fontSize: 16,
+    color: appTheme.colors.accent,
+    textAlign: "center",
+  },
   header: {
     alignItems: "center",
     paddingTop: 4,

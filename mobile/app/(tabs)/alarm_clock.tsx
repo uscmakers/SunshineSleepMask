@@ -30,10 +30,26 @@ import { ALARM_DAYS } from "@/alarm/types";
 import { LabeledSlider } from "@/components/sound/LabeledSlider";
 import { AppScreen } from "@/components/ui/AppScreen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { initMqtt, sendAlarmSettings, sendColor } from "@/hooks/mqttClient";
+import Constants from "expo-constants";
+import {
+  initMqtt,
+  sendAlarmSettings,
+  sendColor,
+  startPhoneSunriseSimulation,
+  stopPhoneSunriseSimulation,
+} from "@/hooks/mqttClient";
 import { appTheme } from "@/theme/appTheme";
 
 const DAYS = [...ALARM_DAYS] as string[];
+
+/** When true, Test Simulation streams sunrise colors over `color` MQTT (works with old ESP firmware). */
+const PHONE_SUNRISE_DEMO = Constants.expoConfig?.extra?.phoneSunriseDemo === true;
+
+function formatSunriseDuration(v: number): string {
+  if (v < 1) return `${Math.round(v * 60)} sec`;
+  if (Number.isInteger(v)) return `${v} min`;
+  return `${Number(v.toFixed(1))} min`;
+}
 
 type AlarmCardProps = {
   alarm: AlarmItem;
@@ -155,10 +171,10 @@ function AlarmCard({
               <LabeledSlider
                 label="Sunrise Duration"
                 value={settings.sunriseDuration}
-                min={5}
+                min={0.5}
                 max={45}
-                step={1}
-                formatValue={(v) => `${Math.round(v)} min`}
+                step={0.5}
+                formatValue={formatSunriseDuration}
                 onValueChange={(v) => onChangeSettings(alarm.id, { sunriseDuration: v })}
               />
               <LabeledSlider
@@ -205,10 +221,10 @@ function AlarmCard({
               <LabeledSlider
                 label="Sunrise Duration"
                 value={settings.sunriseDuration}
-                min={5}
+                min={0.5}
                 max={45}
-                step={1}
-                formatValue={(v) => `${Math.round(v)} min`}
+                step={0.5}
+                formatValue={formatSunriseDuration}
                 onValueChange={(v) => onChangeSettings(alarm.id, { sunriseDuration: v })}
               />
               <LabeledSlider
@@ -268,6 +284,12 @@ export default function AlarmsScreen() {
 
   useEffect(() => {
     initMqtt();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopPhoneSunriseSimulation();
+    };
   }, []);
 
   useEffect(() => {
@@ -334,9 +356,15 @@ export default function AlarmsScreen() {
 
   const testSunrise = (alarmId: string) => {
     const s = ledSettingsById[alarmId] ?? createDefaultLedSettings();
-    const ok = sendAlarmSettings(s.sunriseDuration, s.sunriseBrightness);
+    const ok = PHONE_SUNRISE_DEMO
+      ? startPhoneSunriseSimulation(s.sunriseDuration, s.sunriseBrightness)
+      : sendAlarmSettings(s.sunriseDuration, s.sunriseBrightness);
     updateLedSettings(alarmId, {
-      mqttMsg: ok ? "Sunrise simulation sent to mask." : "Mask not connected yet.",
+      mqttMsg: ok
+        ? PHONE_SUNRISE_DEMO
+          ? "Sunrise running from the app (no ESP update needed)."
+          : "Sunrise simulation sent to mask."
+        : "Mask not connected yet.",
     });
   };
 
