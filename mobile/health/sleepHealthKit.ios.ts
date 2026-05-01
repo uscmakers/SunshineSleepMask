@@ -1,7 +1,7 @@
 import {
-  AuthorizationStatus,
+  AuthorizationRequestStatus,
   CategoryValueSleepAnalysis,
-  authorizationStatusFor,
+  getRequestStatusForAuthorization,
   isHealthDataAvailableAsync,
   queryCategorySamples,
   queryQuantitySamples,
@@ -53,16 +53,14 @@ export async function loadLastNightSleep(): Promise<SleepLoadResult> {
       };
     }
 
-    const sleepAuth = authorizationStatusFor(SLEEP_CATEGORY);
-    if (sleepAuth === AuthorizationStatus.notDetermined) {
+    // `authorizationStatusFor` is for *writing* to HealthKit, not read access—read-only apps
+    // often see `sharingDenied` (no write permission) even when read is allowed. Use
+    // `getRequestStatusForAuthorization` for the read set instead.
+    const readRequestStatus = await getRequestStatusForAuthorization({
+      toRead: [...READ_TYPES],
+    });
+    if (readRequestStatus === AuthorizationRequestStatus.shouldRequest) {
       return { ok: false, reason: "needs_auth" };
-    }
-    if (sleepAuth === AuthorizationStatus.sharingDenied) {
-      return {
-        ok: false,
-        reason: "denied",
-        message: "Allow Health access in Settings › Privacy › Health › SunshineSleepMask.",
-      };
     }
 
     const { start: winStart, end: winEnd } = sleepQueryWindow(new Date());
