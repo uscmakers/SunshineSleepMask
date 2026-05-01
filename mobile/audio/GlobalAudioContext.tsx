@@ -86,6 +86,8 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
   const endTimerId = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickId = useRef<ReturnType<typeof setInterval> | null>(null);
   const spotifyRef = useRef<SpotifyBundle | null>(null);
+  /** Coalesces overlapping refresh calls (polling + focus + playback) to avoid Spotify 429 on `/api/token`. */
+  const spotifyRefreshPromiseRef = useRef<Promise<void> | null>(null);
   const stRef = useRef(st);
   stRef.current = st;
   const sleepMinRef = useRef(st.sleepTimerSelectMin);
@@ -161,6 +163,11 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
     const skewMs = 60_000;
     if (Date.now() < b.expiresAt - skewMs) return;
 
+    if (spotifyRefreshPromiseRef.current) {
+      await spotifyRefreshPromiseRef.current;
+      return;
+    }
+
     const clientId = getSpotifyClientId();
     if (!b.refresh || !clientId) {
       spotifyRef.current = null;
@@ -168,18 +175,31 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
       return;
     }
 
-    try {
-      const next = await refreshSpotifyAccessToken(clientId, b.refresh);
-      spotifyRef.current = {
-        access: next.access,
-        refresh: next.refresh,
-        expiresAt: next.expiresAt,
-      };
-      setSpotifyGen((g) => g + 1);
-    } catch {
-      spotifyRef.current = null;
-      setSpotifyGen((g) => g + 1);
-    }
+    const refreshToken = b.refresh;
+    const run = async () => {
+      try {
+        const next = await refreshSpotifyAccessToken(clientId, refreshToken);
+        if (spotifyRef.current?.refresh === refreshToken) {
+          spotifyRef.current = {
+            access: next.access,
+            refresh: next.refresh,
+            expiresAt: next.expiresAt,
+          };
+          setSpotifyGen((g) => g + 1);
+        }
+      } catch {
+        if (spotifyRef.current?.refresh === refreshToken) {
+          spotifyRef.current = null;
+          setSpotifyGen((g) => g + 1);
+        }
+      } finally {
+        spotifyRefreshPromiseRef.current = null;
+      }
+    };
+
+    const p = run();
+    spotifyRefreshPromiseRef.current = p;
+    await p;
   }, []);
 
   const scheduleSleepTimer = useCallback(

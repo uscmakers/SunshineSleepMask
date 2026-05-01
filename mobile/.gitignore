@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+# Local tooling (icon generation)
+.venv-icon/
+
 # Expo
 .expo/
 dist/

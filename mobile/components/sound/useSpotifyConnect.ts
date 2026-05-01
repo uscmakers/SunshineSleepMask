@@ -25,6 +25,9 @@ const discovery = {
 function mapTokenExchangeError(e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e);
   const lower = raw.toLowerCase();
+  if (lower.includes("429") || lower.includes("too many")) {
+    return "Spotify rate limit — wait a few minutes and try again. If this persists, use your own Spotify app Client ID in expo.extra (shared IDs hit quotas faster).";
+  }
   if (lower.includes("redirect") && (lower.includes("uri") || lower.includes("mismatch"))) {
     return "Invalid redirect URI";
   }

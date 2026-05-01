@@ -25,7 +25,7 @@ export default function HomeScreen() {
   }, [getNextScheduledAlarm, scheduleTick]);
   const tokenOk = Boolean(Constants.expoConfig?.extra?.flespiToken);
   const deviceId =
-    (Constants.expoConfig?.extra?.deviceId as string | undefined) ?? "sleepmask";
+    (Constants.expoConfig?.extra?.deviceId as string | undefined) ?? "esp32-client";
   const [mqttConnected, setMqttConnected] = useState(false);
 
   useEffect(() => {

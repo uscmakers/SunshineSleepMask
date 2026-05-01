@@ -1,13 +1,35 @@
 // mqttClient.ts
+//
+// Parity with `mask_microcontroller/secrets.h` (ESP32), matching lines 5–12 there:
+// ---------------------------------------------------------------------------
+// WIFI_SSID / WIFI_PASSWORD     → ESP32 Wi‑Fi only (not used in React Native).
+// MQTT_HOST     "mqtt.flespi.io"
+// MQTT_PORT     1883            → TCP on device (PubSubClient). This app uses WSS on 443 below.
+// MQTT_TOKEN    "<flespi>"    → Same value as `expo.extra.flespiToken` (username; password empty).
+// MQTT_CLIENT_ID "esp32-client" → ESP MQTT client id; reflected in `expo.extra.deviceId`. Topic paths
+//                                 stay `devices/sleepmask/...`, not `devices/${clientId}/...`.
+// ---------------------------------------------------------------------------
+
 import Constants from "expo-constants";
 import mqtt, { MqttClient } from "mqtt";
 
 const FLESPI_TOKEN = Constants.expoConfig?.extra?.flespiToken;
-const DEVICE_ID = Constants.expoConfig?.extra?.deviceId || "sleepmask";
-const COLOR_TOPIC = `devices/${DEVICE_ID}/color`;
-const STATUS_TOPIC = `devices/${DEVICE_ID}/status`;
-const HEARTBEAT_TOPIC = `devices/${DEVICE_ID}/heartbeat`;
-const ALARM_TOPIC = `devices/${DEVICE_ID}/alarm/set`;
+
+/** Same host as `MQTT_HOST` in secrets.h */
+const MQTT_HOST = "mqtt.flespi.io";
+/** React Native / browser MQTT.js uses WSS; ESP uses TCP `MQTT_PORT` (1883) in secrets.h */
+const MQTT_WSS_URL = `wss://${MQTT_HOST}:443`;
+
+/**
+ * Fixed topic namespace — must match firmware (`devices/sleepmask/color`, `alarm/set`, etc.).
+ * Do not use `expo.extra.deviceId` as a path segment (that value is the ESP MQTT client id only).
+ */
+const MQTT_TOPIC_PREFIX = "devices/sleepmask";
+
+const COLOR_TOPIC = `${MQTT_TOPIC_PREFIX}/color`;
+const STATUS_TOPIC = `${MQTT_TOPIC_PREFIX}/status`;
+const HEARTBEAT_TOPIC = `${MQTT_TOPIC_PREFIX}/heartbeat`;
+const ALARM_TOPIC = `${MQTT_TOPIC_PREFIX}/alarm/set`;
 
 let client: MqttClient | null = null;
 let isConnected = false;
@@ -22,9 +44,8 @@ function emitConnection() {
 export function initMqtt() {
   if (client) return;
 
-  client = mqtt.connect("wss://mqtt.flespi.io:443", {
+  client = mqtt.connect(MQTT_WSS_URL, {
     username: FLESPI_TOKEN,
-    // password: FLESPI_TOKEN, // optional; you can leave it empty
     keepalive: 30,
     reconnectPeriod: 2000,
     clean: true,
@@ -51,8 +72,6 @@ export function initMqtt() {
     if (topic === STATUS_TOPIC) {
       const msg = payload.toString();
       console.log("Status from ESP32:", msg);
-      // parse and update UI if you want
-      // e.g. { "color": "#FF8800" }
     }
   });
 
@@ -91,7 +110,6 @@ export function sendColor(colorHex: string) {
       return;
     }
 
-    // Normalize color (ensure it starts with '#')
     if (!colorHex.startsWith("#")) colorHex = "#" + colorHex;
 
     const payload = JSON.stringify({ color: colorHex });

@@ -7,14 +7,14 @@ module.exports = {
     slug: "SunshineSleepMask",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
+    icon: "./assets/icon.png",
     scheme: "sunshinesleepmask",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     splash: {
-      image: "./assets/images/splash-icon.png",
+      image: "./assets/icon.png",
       resizeMode: "contain",
-      backgroundColor: "#ffffff",
+      backgroundColor: "#000000",
     },
     ios: {
       supportsTablet: true,
@@ -53,7 +53,8 @@ module.exports = {
     },
     extra: {
       flespiToken: "jhIgc6MC1zVOGzhroq483pUhzXZSRhW9NfQR20OCOMf2Rgb2nmKRpzYPTszjDWCd",
-      deviceId: "ESP32-Client",
+      /** Matches ESP32 MQTT client id string (`mqtt.connect(DEVICE_ID, ...)`) — not used in topic paths. */
+      deviceId: "esp32-client",
       spotifyClientId:
         process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID ?? "3b9de7d64cc548debac19b8a464dfa36",
     },
